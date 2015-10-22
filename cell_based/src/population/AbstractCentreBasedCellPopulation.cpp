@@ -172,10 +172,7 @@ void AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::UpdateNodeLocati
         // Throws an exception if the cell movement goes beyond mAbsoluteMovementThreshold
         if (norm_2(displacement) > this->mAbsoluteMovementThreshold)
         {
-            EXCEPTION("Cells are moving by: " << norm_2(displacement) <<
-                    ", which is more than the AbsoluteMovementThreshold: "
-                    << this->mAbsoluteMovementThreshold <<
-                    ". Use a smaller timestep to avoid this exception.");
+            throw (int)ceil(norm_2(displacement)); //Approx displacement is communicated to the simulation.
         }
 
         // Get new node location

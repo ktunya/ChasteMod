@@ -88,6 +88,9 @@ private:
         archive & mBoundaryConditions;
     }
 
+    /*Whether to use an adaptive step size when the movement threshold is exceeded*/
+    bool mAdaptive;
+
 protected:
 
     /** The mechanics used to determine the new location of the cells, a list of the forces. */
@@ -109,7 +112,7 @@ protected:
      * applying any boundary conditions.
      *
      */
-    virtual void UpdateNodePositions();
+    virtual void UpdateNodePositions(double dt);
 
     /**
      * Overridden SetupSolve() method to clear the forces applied to the nodes.
@@ -153,7 +156,8 @@ public:
      */
     OffLatticeSimulation(AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>& rCellPopulation,
                          bool deleteCellPopulationInDestructor=false,
-                         bool initialiseCells=true);
+                         bool initialiseCells=true,
+                         bool mAdaptive=false);
 
     /**
      * Add a force to be used in this simulation (use this to set the mechanics system).
@@ -196,6 +200,13 @@ public:
      * @param rParamsFile the file stream to which the parameters are output
      */
     virtual void OutputSimulationParameters(out_stream& rParamsFile);
+
+
+    /**
+     * @return #mAdaptive.
+     */
+    const bool& GetAdaptive() const;
+
 };
 
 // Serialization for Boost >= 1.36
@@ -216,6 +227,9 @@ inline void save_construct_data(
     // Save data required to construct instance
     const AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>* p_cell_population = &(t->rGetCellPopulation());
     ar & p_cell_population;
+
+    bool adaptive = t->GetAdaptive();
+    ar << adaptive;
 }
 
 /**
@@ -229,9 +243,12 @@ inline void load_construct_data(
     AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>* p_cell_population;
     ar >> p_cell_population;
 
+    bool adaptive;
+    ar >> adaptive;
+
     // Invoke inplace constructor to initialise instance, last two variables set extra
     // member variables to be deleted as they are loaded from archive and to not initialise sells.
-    ::new(t)OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>(*p_cell_population, true, false);
+    ::new(t)OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>(*p_cell_population, true, false, adaptive);
 }
 }
 } // namespace
