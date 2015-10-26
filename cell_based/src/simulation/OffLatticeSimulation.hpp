@@ -39,6 +39,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "AbstractCellBasedSimulation.hpp"
 #include "AbstractForce.hpp"
 #include "AbstractCellPopulationBoundaryCondition.hpp"
+#include "StepperChoice.hpp"
 
 #include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
@@ -89,7 +90,10 @@ private:
     }
 
     /*Whether to use an adaptive step size when the movement threshold is exceeded*/
-    bool mAdaptive;
+    bool adaptive;
+
+    /** Choice of timestepping scheme (Euler, RK etc) **/
+    int stepper;
 
 protected:
 
@@ -106,13 +110,25 @@ protected:
      */
     virtual void UpdateCellLocationsAndTopology();
 
+    /*
+    * Sends the nodes back to the locations given in the input map
+    */
+    void RevertToOldLocations(std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations);
+
+    /*
+    * Applies a contribution from each AbstractForce. Returns force map if required
+    */
+    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > ApplyForces();
+
+    /*
+    * Adds a force contribution to each node as specified in fMap, scaled by a factor
+    */
+    void AddForceMapWithMultiplyingFactor(std::map<Node<SPACE_DIM>*,c_vector<double, SPACE_DIM> > fMap, int factor);
+
     /**
-     * Moves each node to a new position for this timestep by
-     * calling the CellPopulation::UpdateNodeLocations() method then
-     * applying any boundary conditions.
-     *
+     * Applies any boundary conditions.
      */
-    virtual void UpdateNodePositions(double dt);
+    void ApplyBoundaries(std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations);
 
     /**
      * Overridden SetupSolve() method to clear the forces applied to the nodes.
@@ -155,9 +171,10 @@ public:
      *     from an archive)
      */
     OffLatticeSimulation(AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>& rCellPopulation,
-                         bool deleteCellPopulationInDestructor=false,
-                         bool initialiseCells=true,
-                         bool mAdaptive=false);
+                         bool deleteCellPopulationInDestructor = false,
+                         bool initialiseCells = true,
+                         bool adaptiveChoice = false,
+                         int  stepperChoice = StepperChoice::EULER);
 
     /**
      * Add a force to be used in this simulation (use this to set the mechanics system).
@@ -203,9 +220,15 @@ public:
 
 
     /**
-     * @return #mAdaptive.
+     * @return #adaptive.
      */
     const bool& GetAdaptive() const;
+
+
+    /**
+     * @return #stepper.
+     */
+    const int& GetStepper() const;
 
 };
 
@@ -228,8 +251,11 @@ inline void save_construct_data(
     const AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>* p_cell_population = &(t->rGetCellPopulation());
     ar & p_cell_population;
 
-    bool adaptive = t->GetAdaptive();
-    ar << adaptive;
+    bool adapt = t->GetAdaptive();
+    ar << adapt;
+
+    int step = t->GetStepper();
+    ar << step;
 }
 
 /**
@@ -243,12 +269,15 @@ inline void load_construct_data(
     AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>* p_cell_population;
     ar >> p_cell_population;
 
-    bool adaptive;
-    ar >> adaptive;
+    bool adapt;
+    ar >> adapt;
+
+    int step;
+    ar >> step;
 
     // Invoke inplace constructor to initialise instance, last two variables set extra
     // member variables to be deleted as they are loaded from archive and to not initialise sells.
-    ::new(t)OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>(*p_cell_population, true, false, adaptive);
+    ::new(t)OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>(*p_cell_population, true, false, adapt, step);
 }
 }
 } // namespace

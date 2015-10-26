@@ -50,9 +50,11 @@ template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>& rCellPopulation,
                                                 bool deleteCellPopulationInDestructor,
                                                 bool initialiseCells,
-                                                bool adaptive)
+                                                bool adaptiveChoice,
+                                                int  stepperChoice)
     : AbstractCellBasedSimulation<ELEMENT_DIM,SPACE_DIM>(rCellPopulation, deleteCellPopulationInDestructor, initialiseCells),
-    mAdaptive(adaptive)
+    adaptive(adaptiveChoice),
+    stepper(stepperChoice)
 {
     if (!dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&rCellPopulation))
     {
@@ -111,61 +113,209 @@ template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology()
 {
 
-    double totalTimeAdvanced = 0;
-    double dt = this->mDt;
-    double currentStepSize = dt;
+    double timeAdvanced = 0;
+    double targetDt = this->mDt;
+    double currentStepSize = targetDt;
 
     double safetyFactor = 0.95;
-    double movThreshold = dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>* >(&(this->mrCellPopulation))->GetAbsoluteMovementThreshold();
+    double movementThreshold = dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>* >(&(this->mrCellPopulation))
+                               ->GetAbsoluteMovementThreshold();
 
-    while(totalTimeAdvanced < dt){
-
-        // Calculate forces
-        CellBasedEventHandler::BeginEvent(CellBasedEventHandler::FORCE);
-    
-        // Clear all forces
-        for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-             node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-             ++node_iter)
-        {
-            node_iter->ClearAppliedForce();
-        }
-    
-        // Now add force contributions from each AbstractForce
-        for (typename std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >::iterator iter = mForceCollection.begin();
-             iter != mForceCollection.end();
-             ++iter)
-        {
-            (*iter)->AddForceContribution(this->mrCellPopulation);
-        }
-        CellBasedEventHandler::EndEvent(CellBasedEventHandler::FORCE);
-    
-        // Update node positions
+    while(timeAdvanced < targetDt){
+            
+        // Try to update positions
         CellBasedEventHandler::BeginEvent(CellBasedEventHandler::POSITION);
+
+        // Store the initial node positions (these may be needed when applying boundary conditions)    
+        std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations;
+        for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+            node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+            ++node_iter)
+        {
+            old_node_locations[&(*node_iter)] = (node_iter)->rGetLocation();
+        }
+
         try{
 
-            UpdateNodePositions(currentStepSize);
+            switch( stepper ){
+                
+                case StepperChoice::EULER :
+                {
+                    //std::cout << "Update called for" << std::endl;
+
+                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > F = ApplyForces();
+                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
+                                                                        ->UpdateNodeLocations(currentStepSize);
+                }
+                break;
+                
+                case StepperChoice::RK :
+                {
+                    //Left the same as Euler version for now while this code is reworked
+                    //std::cout << "WARNING: RK timestepping is still under construction." << std::endl;
+                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K1 = ApplyForces(); 
+                    //K1 is now stored in the population forces
+                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
+                                                                        ->UpdateNodeLocations(currentStepSize/2.0);
+                    
+                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K2 = ApplyForces(); 
+                    //K2 is now stored in the population forces                                                    
+                    RevertToOldLocations(old_node_locations);
+                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
+                                                                        ->UpdateNodeLocations(currentStepSize/2.0);
+                    
+                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K3 = ApplyForces(); 
+                    //K3 is now stored in the population forces
+                    RevertToOldLocations(old_node_locations);
+                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
+                                                                        ->UpdateNodeLocations(currentStepSize);
+                    
+                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K4 = ApplyForces(); 
+                    //K4 is now stored in the population forces
+                    //Reapply the other K contributions...
+                    AddForceMapWithMultiplyingFactor(K1,1);
+                    AddForceMapWithMultiplyingFactor(K2,2);
+                    AddForceMapWithMultiplyingFactor(K3,2);
+                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
+                                                                        ->UpdateNodeLocations(currentStepSize/6.0);                                                        
+                }
+                break;
+            }
+
+            //std::cout << "Successful step" << std::endl;
+
+            ApplyBoundaries(old_node_locations);
+
+            //std::cout << "Boundaries applied" << std::endl;
+
             // Successful timestep. Update totalTimeAdvanced and increase the timestep by 1% if possible 
-            totalTimeAdvanced += currentStepSize;
-            currentStepSize = fmin(1.01*currentStepSize, dt-totalTimeAdvanced);
+            timeAdvanced += currentStepSize;
+            currentStepSize = fmin(1.01*currentStepSize, targetDt-timeAdvanced);
+
+           // std::cout << "Step ended" << std::endl;
 
         }catch(int e){
 
-            if(mAdaptive){
-                // Update failed, need to reduce step size.
-                // UpdateNodePositions will revert nodes to their old positions for us.
+            if(adaptive){
+
+               // std::cout << "Adaptive step" << std::endl;
+
+                // Update failed
+                // Revert nodes to their old positions.
+                RevertToOldLocations(old_node_locations);
                 // Estimate the largest permissible / remaining timestep. 
-                currentStepSize = fmin(safetyFactor * currentStepSize * (movThreshold/e), dt-totalTimeAdvanced);        
+                currentStepSize = fmin(safetyFactor * currentStepSize * (movementThreshold/(double)e), targetDt-timeAdvanced); 
+
+               // std::cout << "Back to old locations" << std::endl;
+
             }else{
                 // Adaptive set to false. Crash with the usual error.
                 EXCEPTION("Cells are moving by approximately: " << e <<
                 ", which is more than the AbsoluteMovementThreshold. Use a smaller timestep to avoid this exception.");
             }
         }
+
         CellBasedEventHandler::EndEvent(CellBasedEventHandler::POSITION);
 
     }
+
 }
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::RevertToOldLocations(std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations){
+    
+    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+        ++node_iter)
+    {
+        (node_iter)->rGetModifiableLocation() = old_node_locations[&(*node_iter)];
+    }
+}
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ApplyForces(){
+
+    CellBasedEventHandler::BeginEvent(CellBasedEventHandler::FORCE);
+    //std::cout << "Apply forces called" << std::endl;
+
+    // Clear all existing forces
+    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+         node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+         ++node_iter)
+    {
+        node_iter->ClearAppliedForce();
+    }
+
+    //std::cout << "forces cleared" << std::endl;
+    
+    // Now add force contributions from each AbstractForce
+    for (typename std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >::iterator iter = mForceCollection.begin();
+         iter != mForceCollection.end();
+         ++iter)
+    {
+        (*iter)->AddForceContribution(this->mrCellPopulation);
+    }
+    CellBasedEventHandler::EndEvent(CellBasedEventHandler::FORCE);
+
+    //std::cout << "Contributions applied" << std::endl;
+
+    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > nodeForcesMap;
+    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+        ++node_iter)
+    {
+        nodeForcesMap[&(*node_iter)] = (node_iter)->rGetAppliedForce();
+    }
+
+    //std::cout << "Return map" << std::endl;
+
+    return nodeForcesMap;
+};
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::AddForceMapWithMultiplyingFactor(std::map<Node<SPACE_DIM>*,c_vector<double, SPACE_DIM> > fMap, int factor){
+
+    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+        ++node_iter)
+    {
+        c_vector<double, SPACE_DIM> force = fMap[&(*node_iter)];
+        force = force * factor;
+        (node_iter)->AddAppliedForceContribution( force );
+    }
+}
+
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ApplyBoundaries(std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations)
+{
+
+    // Apply any boundary conditions
+    for (typename std::vector<boost::shared_ptr<AbstractCellPopulationBoundaryCondition<ELEMENT_DIM,SPACE_DIM> > >::iterator bcs_iter = mBoundaryConditions.begin();
+         bcs_iter != mBoundaryConditions.end();
+         ++bcs_iter)
+    {
+        (*bcs_iter)->ImposeBoundaryCondition(old_node_locations);
+    }
+
+    // Verify that each boundary condition is now satisfied
+    for (typename std::vector<boost::shared_ptr<AbstractCellPopulationBoundaryCondition<ELEMENT_DIM,SPACE_DIM> > >::iterator bcs_iter = mBoundaryConditions.begin();
+         bcs_iter != mBoundaryConditions.end();
+         ++bcs_iter)
+    {
+        if (!((*bcs_iter)->VerifyBoundaryCondition()))
+        {
+            EXCEPTION("The cell population boundary conditions are incompatible.");
+        }
+    }
+}
+
+
+
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 c_vector<double, SPACE_DIM> OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::CalculateCellDivisionVector(CellPtr pParentCell)
@@ -292,60 +442,7 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::WriteVisualizerSetupFile()
     }
 }
 
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateNodePositions(double dt)
-{
-    /*
-     * Get the previous node positions (these may be needed when applying boundary conditions,
-     * e.g. in the case of immotile cells)
-     */
-    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations;
-    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-         node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-         ++node_iter)
-    {
-        old_node_locations[&(*node_iter)] = (node_iter)->rGetLocation();
-    }
 
-    try{
-
-        // Update node locations
-        static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))->UpdateNodeLocations(dt);
-
-    }catch(int e){
-
-        if(mAdaptive){
-            // If adaptive, wind back node positions to their old locations ready for a smaller timestep to be attempted
-            for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-                node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-                ++node_iter)
-            {
-                (node_iter)->rGetModifiableLocation() = old_node_locations[&(*node_iter)];
-            }
-        }
-
-        throw e;
-    }
-
-    // Apply any boundary conditions
-    for (typename std::vector<boost::shared_ptr<AbstractCellPopulationBoundaryCondition<ELEMENT_DIM,SPACE_DIM> > >::iterator bcs_iter = mBoundaryConditions.begin();
-         bcs_iter != mBoundaryConditions.end();
-         ++bcs_iter)
-    {
-        (*bcs_iter)->ImposeBoundaryCondition(old_node_locations);
-    }
-
-    // Verify that each boundary condition is now satisfied
-    for (typename std::vector<boost::shared_ptr<AbstractCellPopulationBoundaryCondition<ELEMENT_DIM,SPACE_DIM> > >::iterator bcs_iter = mBoundaryConditions.begin();
-         bcs_iter != mBoundaryConditions.end();
-         ++bcs_iter)
-    {
-        if (!((*bcs_iter)->VerifyBoundaryCondition()))
-        {
-            EXCEPTION("The cell population boundary conditions are incompatible.");
-        }
-    }
-}
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::SetupSolve()
@@ -396,7 +493,13 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OutputSimulationParameters(out
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 const bool& OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::GetAdaptive() const{
-    return mAdaptive;
+    return adaptive;
+};
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+const int& OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::GetStepper() const{
+    return stepper;
 };
 
 ///////// Explicit instantiation
