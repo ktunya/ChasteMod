@@ -113,15 +113,17 @@ template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology()
 {
 
-    double timeAdvanced = 0;
-    double targetDt = this->mDt;
-    double currentStepSize = targetDt;
+    //double timeAdvanced = 0;
+    //double targetDt = this->mDt;
+    //double currentStepSize = targetDt;
 
-    double safetyFactor = 0.95;
-    double movementThreshold = dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>* >(&(this->mrCellPopulation))
-                               ->GetAbsoluteMovementThreshold();
+    //double safetyFactor = 0.95;
+    //double movementThreshold = dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>* >(&(this->mrCellPopulation))
+    //                           ->GetAbsoluteMovementThreshold();
 
-    while(timeAdvanced < targetDt){
+    double currentStepSize = this->mDt;
+
+    //while(timeAdvanced < targetDt){
             
         // Try to update positions
         CellBasedEventHandler::BeginEvent(CellBasedEventHandler::POSITION);
@@ -135,13 +137,13 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
             old_node_locations[&(*node_iter)] = (node_iter)->rGetLocation();
         }
 
-        try{
+        //try{
 
             switch( stepper ){
                 
                 case StepperChoice::EULER :
                 {
-                    //std::cout << "Update called for" << std::endl;
+                    //std::cout << "Euler update called for" << std::endl;
 
                     std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > F = ApplyForces();
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
@@ -152,7 +154,6 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                 case StepperChoice::RK :
                 {
                     //Left the same as Euler version for now while this code is reworked
-                    //std::cout << "WARNING: RK timestepping is still under construction." << std::endl;
                     std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K1 = ApplyForces(); 
                     //K1 is now stored in the population forces
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
@@ -173,12 +174,13 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                     std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K4 = ApplyForces(); 
                     //K4 is now stored in the population forces
                     //Reapply the other K contributions...
+                    RevertToOldLocations(old_node_locations);
                     AddForceMapWithMultiplyingFactor(K1,1);
                     AddForceMapWithMultiplyingFactor(K2,2);
                     AddForceMapWithMultiplyingFactor(K3,2);
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
                                                                         ->UpdateNodeLocations(currentStepSize/6.0);                                                        
-                }
+                }           
                 break;
             }
 
@@ -189,11 +191,13 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
             //std::cout << "Boundaries applied" << std::endl;
 
             // Successful timestep. Update totalTimeAdvanced and increase the timestep by 1% if possible 
-            timeAdvanced += currentStepSize;
-            currentStepSize = fmin(1.01*currentStepSize, targetDt-timeAdvanced);
+            //timeAdvanced += currentStepSize;
+            //if(adaptive){
+            //    currentStepSize = fmin(1.01*currentStepSize, targetDt-timeAdvanced);
+            //}
 
            // std::cout << "Step ended" << std::endl;
-
+         /*
         }catch(int e){
 
             if(adaptive){
@@ -215,9 +219,8 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
             }
         }
 
-        CellBasedEventHandler::EndEvent(CellBasedEventHandler::POSITION);
-
-    }
+        CellBasedEventHandler::EndEvent(CellBasedEventHandler::POSITION);*/
+    //}
 
 }
 

@@ -37,6 +37,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define TEST3DNODEBASEDWITHRKSTEPPER_HPP_
 
 #include <cxxtest/TestSuite.h>
+#include <ctime>
+#include <sstream>
 
 // Must be included before other cell_based headers
 #include "CellBasedSimulationArchiver.hpp"
@@ -51,98 +53,288 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "StochasticDurationCellCycleModel.hpp"
 #include "RandomNumberGenerator.hpp"
 #include "PetscSetupAndFinalize.hpp"
-
+#include "DetailedCellTracker.hpp"
 
 
 class TestAlternativeTimesteppers : public AbstractCellBasedWithTimingsTestSuite
 {
 public:
 
+    // We want to compare various timestepping methods with forward Euler here, including RK4,
+    // to see whether performance improves. RK4 is more work per step than Euler, so we'll only
+    // see a benefit if we allow RK to take bigger steps and use a larger absolute movement threshold.
+    // Therefore the idea of this test is to run each method several times with different thresholds and
+    // step sizes, to identify the point where accuracy is lost. A fairer comparison of the different 
+    // methods is then possible
 
     void Test3dNodeBasedWithEulerStepper() throw (Exception)
     {
-        RandomNumberGenerator::Instance()->Reseed(0);
+        
+        double movThresholds[11] = {0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 1, 2, 3};
+        // Predetermined minimum steps per hour for each mov threshold
+        int stepsPerHour[11] = {590, 290, 220, 150, 130, 110, 80, 70, 40, 20, 20};
 
-        // Create a simple 3D NodeBasedCellPopulation
-        std::vector<Node<3>*> nodes;
-        nodes.push_back(new Node<3>(0, false,  0.5, 0.0, 0.0));
-        nodes.push_back(new Node<3>(1, false, -0.5, 0.0, 0.0));
-        NodesOnlyMesh<3> mesh;
-        mesh.ConstructNodesWithoutMesh(nodes, 1.5);
 
-        std::vector<CellPtr> cells;
-        MAKE_PTR(StemCellProliferativeType, pStemType);
-        CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
-        cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
+        for(int i=0; i<11; i++){
 
-        NodeBasedCellPopulation<3> cellPopulation(mesh, cells);
-        cellPopulation.SetAbsoluteMovementThreshold(0.5);
+            double dt = 1.0/stepsPerHour[i];
+            double thresh = movThresholds[i];
 
-        // Set up cell-based simulation
-        OffLatticeSimulation<3> simulator(cellPopulation, false, true, false, StepperChoice::EULER);
-        simulator.SetOutputDirectory("3DNodeBasedWithEulerStepper");
-        simulator.SetSamplingTimestepMultiple(250);
-        simulator.SetDt(1.0/250.0);
-        simulator.SetEndTime(50.0);
+            std::cout << "dt: " << dt << " thresh:" << thresh << std::endl;
 
-        // Create a force law and pass it to the simulation
-        MAKE_PTR(GeneralisedLinearSpringForce<3>, pLinearForce);
-        pLinearForce->SetCutOffLength(1.5);
-        simulator.AddForce(pLinearForce);
+            RandomNumberGenerator::Instance()->Reseed(0);
+            SimulationTime::Instance()->Destroy();
+            SimulationTime::Instance()->SetStartTime(0.0);
 
-        std::cout << "Start solve" << std::endl;
+            // Create a simple 3D NodeBasedCellPopulation
+            std::vector<Node<3>*> nodes;
+            nodes.push_back(new Node<3>(0, false,  0.5, 0.0, 0.0));
+            nodes.push_back(new Node<3>(1, false, -0.5, 0.0, 0.0));
+            NodesOnlyMesh<3> mesh;
+            mesh.ConstructNodesWithoutMesh(nodes, 2);
 
-        // Run simulation
-        simulator.Solve();
+            std::vector<CellPtr> cells;
+            MAKE_PTR(StemCellProliferativeType, pStemType);
+            CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
+            cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
 
-        // Avoid memory leak
-        for (unsigned i=0; i<nodes.size(); i++)
-        {
-            delete nodes[i];
+            NodeBasedCellPopulation<3> cellPopulation(mesh, cells);
+            cellPopulation.SetAbsoluteMovementThreshold(thresh);
+            cellPopulation.SetDampingConstantNormal(1.0);
+
+            // Set up cell-based simulation
+            OffLatticeSimulation<3> simulator(cellPopulation, false, true, false, StepperChoice::EULER);
+            std::stringstream outdir;
+            outdir << "EulerStepperThresh" << thresh;
+            simulator.SetOutputDirectory(outdir.str());
+            simulator.SetSamplingTimestepMultiple(stepsPerHour[i]);
+            simulator.SetDt(dt);
+            simulator.SetEndTime(100.0);
+
+            // Create a force law and pass it to the simulation
+            MAKE_PTR(GeneralisedLinearSpringForce<3>, pLinearForce);
+            pLinearForce->SetCutOffLength(1.5);
+            simulator.AddForce(pLinearForce);
+
+            // Add a movement tracker 
+            MAKE_PTR_ARGS(DetailedCellTracker<3>, pTracking, (stepsPerHour[i],1));
+            simulator.AddSimulationModifier(pTracking);
+
+            // Run simulation
+            int currentT = time(0);
+            std::cout << "MovThreshold = " << thresh << std::endl;
+            std::cout << "Sample rand start " << RandomNumberGenerator::Instance()->ranf() << std::endl; 
+            simulator.Solve();
+            std::cout << "Sample rand end " << RandomNumberGenerator::Instance()->ranf() << std::endl; 
+            std::cout << "Time elapsed: " << time(0) - currentT << endl;
+
+            for (unsigned i=0; i<nodes.size(); i++)
+            {
+                delete nodes[i];
+            }
+        
         }
+    }
+
+
+    void Test3dNodeBasedWithEulerStepperAdaptive() throw (Exception)
+    {
+        /*
+        double movThresholds[11] = {0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 1, 2, 3};
+        // Predetermined minimum steps per hour for each mov threshold
+        int stepsPerHour[11] =     {70, 40, 25, 25, 20, 15, 15, 15, 5, 5, 5}; 
+
+
+        for(int i=0; i<11; i++){
+
+            double dt = 1.0/stepsPerHour[i];
+            double thresh = movThresholds[i];
+
+            std::cout << "dt: " << dt << " thresh:" << thresh << std::endl;
+
+            RandomNumberGenerator::Instance()->Reseed(0);
+            SimulationTime::Instance()->Destroy();
+            SimulationTime::Instance()->SetStartTime(0.0);
+
+            // Create a simple 3D NodeBasedCellPopulation
+            std::vector<Node<3>*> nodes;
+            nodes.push_back(new Node<3>(0, false,  0.5, 0.0, 0.0));
+            nodes.push_back(new Node<3>(1, false, -0.5, 0.0, 0.0));
+            NodesOnlyMesh<3> mesh;
+            mesh.ConstructNodesWithoutMesh(nodes, 10);
+
+            std::vector<CellPtr> cells;
+            MAKE_PTR(StemCellProliferativeType, pStemType);
+            CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
+            cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
+
+            NodeBasedCellPopulation<3> cellPopulation(mesh, cells);
+            cellPopulation.SetAbsoluteMovementThreshold(thresh);
+
+            // Set up cell-based simulation
+            OffLatticeSimulation<3> simulator(cellPopulation, false, true, true, StepperChoice::EULER);
+            std::stringstream outdir;
+            outdir << "AdaptiveEulerStepperThresh" << thresh;
+            simulator.SetOutputDirectory(outdir.str());
+            simulator.SetSamplingTimestepMultiple(stepsPerHour[i]);
+            simulator.SetDt(dt);
+            simulator.SetEndTime(100.0);
+
+            // Create a force law and pass it to the simulation
+            MAKE_PTR(GeneralisedLinearSpringForce<3>, pLinearForce);
+            pLinearForce->SetCutOffLength(1.5);
+            simulator.AddForce(pLinearForce);
+
+            // Add a movement tracker 
+            MAKE_PTR_ARGS(DetailedCellTracker<3>, pTracking, (stepsPerHour[i],1));
+            simulator.AddSimulationModifier(pTracking);
+
+            // Run simulation
+            int currentT = time(0);
+            simulator.Solve();
+            std::cout << "Time elapsed: " << time(0) - currentT << " for movThreshold = " << thresh << std::endl;
+
+            for (unsigned i=0; i<nodes.size(); i++)
+            {
+                delete nodes[i];
+            }
+        
+        }*/
     }
 
 
     void Test3dNodeBasedWithRKStepper() throw (Exception)
     {
-        RandomNumberGenerator::Instance()->Reseed(0);
-    
-        // Create a simple 3D NodeBasedCellPopulation
-        std::vector<Node<3>*> nodes;
-        nodes.push_back(new Node<3>(0, false,  0.5, 0.0, 0.0));
-        nodes.push_back(new Node<3>(1, false, -0.5, 0.0, 0.0));
-        NodesOnlyMesh<3> mesh;
-        mesh.ConstructNodesWithoutMesh(nodes, 1.5);
-    
-        std::vector<CellPtr> cells;
-        MAKE_PTR(StemCellProliferativeType, pStemType);
-        CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
-        cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
-    
-        NodeBasedCellPopulation<3> cellPopulation(mesh, cells);
-        cellPopulation.SetAbsoluteMovementThreshold(0.5);
-    
-        // Set up cell-based simulation
-        OffLatticeSimulation<3> simulator(cellPopulation, false, true, false, StepperChoice::RK);
-        simulator.SetOutputDirectory("3DNodeBasedWithRKStepper");
-        simulator.SetSamplingTimestepMultiple(250);
-        simulator.SetDt(1.0/250.0);
-        simulator.SetEndTime(50.0);
-    
-        // Create a force law and pass it to the simulation
-        MAKE_PTR(GeneralisedLinearSpringForce<3>, pLinearForce);
-        pLinearForce->SetCutOffLength(1.5);
-        simulator.AddForce(pLinearForce);
-    
-        // Run simulation
-        simulator.Solve();
-    
-        // Avoid memory leak
-        for (unsigned i=0; i<nodes.size(); i++)
-        {
-            delete nodes[i];
-        }
+        
+        double movThresholds[11] = {0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 1, 2, 3};
+        // Predetermined minimum steps per hour for each mov threshold
+        int stepsPerHour[11] = {590, 290, 220, 150, 130, 110, 80, 70, 40, 20, 20}; 
+
+
+        for(int i=0; i<11; i++){
+
+            double dt = 1.0/stepsPerHour[i];
+            double thresh = movThresholds[i];
+
+            std::cout << "dt: " << dt << " thresh:" << thresh << std::endl;
+
+            RandomNumberGenerator::Instance()->Reseed(0);
+            SimulationTime::Instance()->Destroy();
+            SimulationTime::Instance()->SetStartTime(0.0);
+
+            // Create a simple 3D NodeBasedCellPopulation
+            std::vector<Node<3>*> nodes;
+            nodes.push_back(new Node<3>(0, false,  0.5, 0.0, 0.0));
+            nodes.push_back(new Node<3>(1, false, -0.5, 0.0, 0.0));
+            NodesOnlyMesh<3> mesh;
+            mesh.ConstructNodesWithoutMesh(nodes, 2);
+
+            std::vector<CellPtr> cells;
+            MAKE_PTR(StemCellProliferativeType, pStemType);
+            CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
+            cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
+
+            NodeBasedCellPopulation<3> cellPopulation(mesh, cells);
+            cellPopulation.SetAbsoluteMovementThreshold(thresh);
+            cellPopulation.SetDampingConstantNormal(1.0);
+
+            // Set up cell-based simulation
+            OffLatticeSimulation<3> simulator(cellPopulation, false, true, false, StepperChoice::RK);
+            std::stringstream outdir;
+            outdir << "RKStepperThresh" << thresh;
+            simulator.SetOutputDirectory(outdir.str());
+            simulator.SetSamplingTimestepMultiple(stepsPerHour[i]);
+            simulator.SetDt(dt);
+            simulator.SetEndTime(100.0);
+
+            // Create a force law and pass it to the simulation
+            MAKE_PTR(GeneralisedLinearSpringForce<3>, pLinearForce);
+            pLinearForce->SetCutOffLength(1.5);
+            simulator.AddForce(pLinearForce);
+
+            // Add a movement tracker 
+            MAKE_PTR_ARGS(DetailedCellTracker<3>, pTracking, (stepsPerHour[i],1));
+            simulator.AddSimulationModifier(pTracking);
+
+            // Run simulation
+            int currentT = time(0);
+            std::cout << "MovThreshold = " << thresh << std::endl;
+            std::cout << "Sample rand start " << RandomNumberGenerator::Instance()->ranf() << std::endl; 
+            simulator.Solve();
+            std::cout << "Sample rand end " << RandomNumberGenerator::Instance()->ranf() << std::endl; 
+            std::cout << "Time elapsed: " << time(0) - currentT << endl;
+
+            for (unsigned i=0; i<nodes.size(); i++)
+            {
+                delete nodes[i];
+            }     
+        } 
     }
+
+
+    void Test3dNodeBasedWithRKStepperAdaptive() throw (Exception)
+    {
+        /*
+        double movThresholds[11] = {0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 1, 2, 3};
+        // Predetermined minimum steps per hour for each mov threshold
+        int stepsPerHour[11] = {70, 40, 25, 25, 20, 15, 15, 15, 5, 5, 5}; 
+
+
+        for(int i=0; i<11; i++){
+
+            double dt = 1.0/stepsPerHour[i];
+            double thresh = movThresholds[i];
+
+            std::cout << "dt: " << dt << " thresh:" << thresh << std::endl;
+
+            RandomNumberGenerator::Instance()->Reseed(0);
+            SimulationTime::Instance()->Destroy();
+            SimulationTime::Instance()->SetStartTime(0.0);
+
+            // Create a simple 3D NodeBasedCellPopulation
+            std::vector<Node<3>*> nodes;
+            nodes.push_back(new Node<3>(0, false,  0.5, 0.0, 0.0));
+            nodes.push_back(new Node<3>(1, false, -0.5, 0.0, 0.0));
+            NodesOnlyMesh<3> mesh;
+            mesh.ConstructNodesWithoutMesh(nodes, 2);
+
+            std::vector<CellPtr> cells;
+            MAKE_PTR(StemCellProliferativeType, pStemType);
+            CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
+            cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
+
+            NodeBasedCellPopulation<3> cellPopulation(mesh, cells);
+            cellPopulation.SetAbsoluteMovementThreshold(thresh);
+
+            // Set up cell-based simulation
+            OffLatticeSimulation<3> simulator(cellPopulation, false, true, true, StepperChoice::RK);
+            std::stringstream outdir;
+            outdir << "AdaptiveRKStepperThresh" << thresh;
+            simulator.SetOutputDirectory(outdir.str());
+            simulator.SetSamplingTimestepMultiple(stepsPerHour[i]);
+            simulator.SetDt(dt);
+            simulator.SetEndTime(100.0);
+
+            // Create a force law and pass it to the simulation
+            MAKE_PTR(GeneralisedLinearSpringForce<3>, pLinearForce);
+            pLinearForce->SetCutOffLength(1.5);
+            simulator.AddForce(pLinearForce);
+
+            // Add a movement tracker 
+            MAKE_PTR_ARGS(DetailedCellTracker<3>, pTracking, (stepsPerHour[i],1));
+            simulator.AddSimulationModifier(pTracking);
+
+            // Run simulation
+            int currentT = time(0);
+            simulator.Solve();
+            std::cout << "Time elapsed: " << time(0) - currentT << " for movThreshold = " << thresh << std::endl;
+
+            for (unsigned i=0; i<nodes.size(); i++)
+            {
+                delete nodes[i];
+            }     
+        }*/
+    };
  
 };
 
