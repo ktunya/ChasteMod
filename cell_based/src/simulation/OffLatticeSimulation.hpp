@@ -116,14 +116,14 @@ protected:
     void RevertToOldLocations(std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations);
 
     /*
-    * Applies a contribution from each AbstractForce. Returns force map if required
+    * Applies a contribution from each AbstractForce. Returns force vector.
     */
-    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > ApplyForces();
+    std::vector< c_vector<double, SPACE_DIM> > ApplyForces();
 
     /*
     * Adds a force contribution to each node as specified in fMap, scaled by a factor
     */
-    void AddForceMapWithMultiplyingFactor(std::map<Node<SPACE_DIM>*,c_vector<double, SPACE_DIM> > fMap, int factor);
+    void AddForceVecWithMultiplyingFactor(std::vector< c_vector<double, SPACE_DIM> > fVec, int factor);
 
     /**
      * Applies any boundary conditions.

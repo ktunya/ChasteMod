@@ -141,9 +141,7 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                 
                 case StepperChoice::EULER :
                 {
-                    //std::cout << "Euler update called for" << std::endl;
-
-                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > F = ApplyForces();
+                    std::vector< c_vector<double, SPACE_DIM> > F = ApplyForces();
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
                                                                         ->UpdateNodeLocations(currentStepSize);
                 }
@@ -151,31 +149,33 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                 
                 case StepperChoice::RK :
                 {
-                    //Left the same as Euler version for now while this code is reworked
-                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K1 = ApplyForces(); 
+                    std::vector< c_vector<double, SPACE_DIM> > K1 = ApplyForces(); 
                     //K1 is now stored in the population forces
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
                                                                         ->UpdateNodeLocations(currentStepSize/2.0);
+
+                    //std::cout << "force " << K1[0] << std::endl;
+                    //std::cout << "force " << K1[this->mrCellPopulation.GetNumNodes()-1] << std::endl;
                     
-                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K2 = ApplyForces(); 
+                    std::vector< c_vector<double, SPACE_DIM> > K2 = ApplyForces(); 
                     //K2 is now stored in the population forces                                                    
                     RevertToOldLocations(old_node_locations);
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
                                                                         ->UpdateNodeLocations(currentStepSize/2.0);
                     
-                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K3 = ApplyForces(); 
+                    std::vector< c_vector<double, SPACE_DIM> > K3 = ApplyForces(); 
                     //K3 is now stored in the population forces
                     RevertToOldLocations(old_node_locations);
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
                                                                         ->UpdateNodeLocations(currentStepSize);
                     
-                    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > K4 = ApplyForces(); 
+                    std::vector< c_vector<double, SPACE_DIM> > K4 = ApplyForces(); 
                     //K4 is now stored in the population forces
                     //Reapply the other K contributions...
                     RevertToOldLocations(old_node_locations);
-                    AddForceMapWithMultiplyingFactor(K1,1);
-                    AddForceMapWithMultiplyingFactor(K2,2);
-                    AddForceMapWithMultiplyingFactor(K3,2);
+                    AddForceVecWithMultiplyingFactor(K1,1);
+                    AddForceVecWithMultiplyingFactor(K2,2);
+                    AddForceVecWithMultiplyingFactor(K3,2);
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
                                                                         ->UpdateNodeLocations(currentStepSize/6.0);                                                        
                 }           
@@ -226,10 +226,9 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::RevertToOldLocations(std::map<
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ApplyForces(){
+std::vector< c_vector<double, SPACE_DIM> > OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ApplyForces(){
 
     CellBasedEventHandler::BeginEvent(CellBasedEventHandler::FORCE);
-    //std::cout << "Apply forces called" << std::endl;
 
     // Clear all existing forces
     for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
@@ -238,44 +237,49 @@ std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > OffLatticeSimulation<EL
     {
         node_iter->ClearAppliedForce();
     }
-
-    //std::cout << "forces cleared" << std::endl;
     
-    // Now add force contributions from each AbstractForce
+    // Now add force contributions from each AbstractForce.  
     for (typename std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >::iterator iter = mForceCollection.begin();
          iter != mForceCollection.end();
          ++iter)
     {
         (*iter)->AddForceContribution(this->mrCellPopulation);
     }
+
     CellBasedEventHandler::EndEvent(CellBasedEventHandler::FORCE);
 
-    //std::cout << "Contributions applied" << std::endl;
+    // Store a force vector in case the stepper requires it.  
+    std::vector< c_vector<double,SPACE_DIM> > forceVector;
+    forceVector.reserve(this->mrCellPopulation.GetNumNodes());
 
-    std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > nodeForcesMap;
     for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-        ++node_iter)
+         node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+         ++node_iter)
     {
-        nodeForcesMap[&(*node_iter)] = (node_iter)->rGetAppliedForce();
+        forceVector.push_back(node_iter->rGetAppliedForce()); 
     }
 
-    //std::cout << "Return map" << std::endl;
+    //std::cout << "recordForce " << forceVector[0] << std::endl;
+    //std::cout << "recordForce " << forceVector[this->mrCellPopulation.GetNumNodes()-1] << std::endl;
 
-    return nodeForcesMap;
+    return forceVector;
 };
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::AddForceMapWithMultiplyingFactor(std::map<Node<SPACE_DIM>*,c_vector<double, SPACE_DIM> > fMap, int factor){
+void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::AddForceVecWithMultiplyingFactor(std::vector< c_vector<double, SPACE_DIM> > fVec, int factor){
 
+    //std::cout << "AddForce " << fVec[0] << std::endl;
+    //std::cout << "AddForce " << fVec[this->mrCellPopulation.GetNumNodes()-1] << std::endl;
+
+    int tempIteratorIndex = 0;
     for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
         node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
         ++node_iter)
     {
-        c_vector<double, SPACE_DIM> force = fMap[&(*node_iter)];
-        force = force * factor;
+        c_vector<double, SPACE_DIM> force = factor * fVec[tempIteratorIndex];
         (node_iter)->AddAppliedForceContribution( force );
+        tempIteratorIndex++;
     }
 }
 
