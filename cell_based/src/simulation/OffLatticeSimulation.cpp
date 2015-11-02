@@ -113,17 +113,15 @@ template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology()
 {
 
-    //double timeAdvanced = 0;
-    //double targetDt = this->mDt;
-    //double currentStepSize = targetDt;
+    double timeAdvanced = 0;
+    double targetDt = this->mDt;
+    double currentStepSize = targetDt;
 
-    //double safetyFactor = 0.95;
-    //double movementThreshold = dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>* >(&(this->mrCellPopulation))
-    //                           ->GetAbsoluteMovementThreshold();
+    double safetyFactor = 0.95;
+    double movementThreshold = dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>* >(&(this->mrCellPopulation))
+                               ->GetAbsoluteMovementThreshold();
 
-    double currentStepSize = this->mDt;
-
-    //while(timeAdvanced < targetDt){
+    while(timeAdvanced < targetDt){
             
         // Try to update positions
         CellBasedEventHandler::BeginEvent(CellBasedEventHandler::POSITION);
@@ -137,7 +135,7 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
             old_node_locations[&(*node_iter)] = (node_iter)->rGetLocation();
         }
 
-        //try{
+        try{
 
             switch( stepper ){
                 
@@ -184,33 +182,23 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                 break;
             }
 
-            //std::cout << "Successful step" << std::endl;
-
             ApplyBoundaries(old_node_locations);
 
-            //std::cout << "Boundaries applied" << std::endl;
-
             // Successful timestep. Update totalTimeAdvanced and increase the timestep by 1% if possible 
-            //timeAdvanced += currentStepSize;
-            //if(adaptive){
-            //    currentStepSize = fmin(1.01*currentStepSize, targetDt-timeAdvanced);
-            //}
+            timeAdvanced += currentStepSize;
+            if(adaptive){
+                currentStepSize = fmin(1.01*currentStepSize, targetDt-timeAdvanced);
+            }
 
-           // std::cout << "Step ended" << std::endl;
-         /*
         }catch(int e){
 
             if(adaptive){
-
-               // std::cout << "Adaptive step" << std::endl;
 
                 // Update failed
                 // Revert nodes to their old positions.
                 RevertToOldLocations(old_node_locations);
                 // Estimate the largest permissible / remaining timestep. 
                 currentStepSize = fmin(safetyFactor * currentStepSize * (movementThreshold/(double)e), targetDt-timeAdvanced); 
-
-               // std::cout << "Back to old locations" << std::endl;
 
             }else{
                 // Adaptive set to false. Crash with the usual error.
@@ -219,8 +207,8 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
             }
         }
 
-        CellBasedEventHandler::EndEvent(CellBasedEventHandler::POSITION);*/
-    //}
+        CellBasedEventHandler::EndEvent(CellBasedEventHandler::POSITION);
+    }
 
 }
 
