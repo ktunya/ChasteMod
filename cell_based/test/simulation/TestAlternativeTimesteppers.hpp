@@ -70,12 +70,12 @@ public:
     void Test3dNodeBasedWithEulerStepper() throw (Exception)
     {
         
-        double movThresholds[6] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05};
+        double movThresholds[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
         // Predetermined minimum steps per hour for each mov threshold
-        int stepsPerHour[6] = {10000, 5000, 2500, 1800, 1300, 590};
+        int stepsPerHour[12] =     {10000, 5000, 2500, 1800, 1300,  590, 295, 147, 100,  75,  60,  59};
 
 
-        for(int i=0; i<6; i++){
+        for(int i=0; i<12; i++){
 
             double dt = 1.0/stepsPerHour[i];
             double thresh = movThresholds[i];
@@ -140,12 +140,12 @@ public:
     void Test3dNodeBasedWithEulerStepperAdaptive() throw (Exception)
     {
         
-        double movThresholds[6] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05};
+        double movThresholds[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
         // Predetermined minimum steps per hour for each mov threshold
-        int stepsPerHour[6] =     {5000, 2500, 1800, 1300, 590, 295}; 
+        int stepsPerHour[12] =     {5000, 2500, 1800, 1300, 590, 295, 147, 73, 50,  38,  30,  25}; 
 
 
-        for(int i=0; i<6; i++){
+        for(int i=0; i<12; i++){
 
             double dt = 1.0/stepsPerHour[i];
             double thresh = movThresholds[i];
@@ -206,12 +206,12 @@ public:
     void Test3dNodeBasedWithRKStepper() throw (Exception)
     {
         
-        double movThresholds[6] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05};
+        double movThresholds[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
         // Predetermined minimum steps per hour for each mov threshold
-        int stepsPerHour[6] = {10000, 5000, 2500, 1800, 1300, 590}; 
+        int stepsPerHour[12] = {10000, 5000, 2500, 1800, 1300, 590, 295, 147, 100,  75,  60,  59}; 
 
 
-        for(int i=0; i<6; i++){
+        for(int i=0; i<12; i++){
 
             double dt = 1.0/stepsPerHour[i];
             double thresh = movThresholds[i];
@@ -275,12 +275,12 @@ public:
     void Test3dNodeBasedWithRKStepperAdaptive() throw (Exception)
     {
 
-        double movThresholds[6] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05};
+        double movThresholds[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
         // Predetermined minimum steps per hour for each mov threshold
-        int stepsPerHour[6] =     {5000, 2500, 1800, 1300, 590, 295}; 
+        int stepsPerHour[12] =     {5000, 2500, 1800, 1300, 590, 295, 147, 73, 50,  38,  30,  25}; 
 
 
-        for(int i=0; i<6; i++){
+        for(int i=0; i<12; i++){
 
             double dt = 1.0/stepsPerHour[i];
             double thresh = movThresholds[i];
