@@ -45,6 +45,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "LogFile.hpp"
 #include "Version.hpp"
 #include "ExecutableSupport.hpp"
+#include "ReplicatableVector.hpp"
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>& rCellPopulation,
@@ -82,6 +83,16 @@ OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPo
         // i.e. if you want to use this class with your own subclass of AbstractOffLatticeCellPopulation, then simply
         // comment out the line below
         NEVER_REACHED;
+    }
+
+    // Setup for Adams Moulton if required
+    pNewtonSolver = NULL;
+    currentAMStep = 0;
+    if(stepperChoice == StepperChoice::ADAMSM){
+        pNewtonSolver = new SimpleNewtonNonlinearSolver(); 
+        pNewtonSolver->SetTolerance(1e-5);
+        //pNewtonSolver->SetWriteStats(true);
+        currentAMStep = this->mDt;
     }
 }
 
@@ -153,10 +164,7 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                     //K1 is now stored in the population forces
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
                                                                         ->UpdateNodeLocations(currentStepSize/2.0);
-
-                    //std::cout << "force " << K1[0] << std::endl;
-                    //std::cout << "force " << K1[this->mrCellPopulation.GetNumNodes()-1] << std::endl;
-                    
+                
                     std::vector< c_vector<double, SPACE_DIM> > K2 = ApplyForces(); 
                     //K2 is now stored in the population forces                                                    
                     RevertToOldLocations(old_node_locations);
@@ -179,6 +187,66 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                     static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
                                                                         ->UpdateNodeLocations(currentStepSize/6.0);                                                        
                 }           
+                break;
+
+                case StepperChoice::ADAMSM:
+                {
+                    currentAMStep = currentStepSize;
+
+                    int cellCount = this->mrCellPopulation.GetNumNodes();
+                    unsigned systemSize = cellCount * SPACE_DIM;
+
+                    // Setup initial condition
+                    Vec initialCondition = PetscTools::CreateAndSetVec(systemSize, 0.0);
+
+                    int tempIteratorIndex = 0;
+                    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+                        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+                        ++node_iter)
+                    {
+                        c_vector<double, SPACE_DIM> location = node_iter->rGetLocation();
+                        for(int i=0; i<SPACE_DIM; i++){
+                            PetscVecTools::SetElement(initialCondition, SPACE_DIM*tempIteratorIndex+i, location[i]);
+                        }
+                        tempIteratorIndex++;
+                    }
+
+                    Vec solnNextTimestep = pNewtonSolver->Solve( &OffLatticeSimulation_AdamsM_ComputeResidual<ELEMENT_DIM, SPACE_DIM>,   /*Compute residual fn ptr*/
+                                                                 &OffLatticeSimulation_AdamsM_ComputeJacobian<ELEMENT_DIM, SPACE_DIM>,   /*Compute Jacobian fn ptr*/ 
+                                                                 initialCondition,   /*Current positions*/
+                                                                 UINT_MAX,           /*Triggers automatic preallocation*/
+                                                                 this);              /*Optional pContext containing this class*/
+
+                    ReplicatableVector solnNextTimestepRepl(solnNextTimestep);
+
+                    //Copying out results
+                    tempIteratorIndex = 0;
+                    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+                        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+                        ++node_iter)
+                    {
+                        c_vector<double, SPACE_DIM> oldLocation = node_iter->rGetLocation();
+                
+                        c_vector<double, SPACE_DIM> newLocation;
+                        double displacement = 0;
+                        for(int i=0; i<SPACE_DIM; i++){
+                            newLocation[i] = solnNextTimestepRepl[SPACE_DIM*tempIteratorIndex+i];
+                            displacement += (oldLocation[i] - newLocation[i]) * (oldLocation[i] - newLocation[i]);
+                        }
+                        
+                        displacement = pow(displacement, 0.5);
+                        if(displacement > movementThreshold){
+                            throw (int)ceil(displacement);
+                        }
+
+                        node_iter->rGetModifiableLocation() = newLocation;
+                        tempIteratorIndex++;
+                    }
+
+                    // Cleanup
+                    PetscTools::Destroy(initialCondition);
+                    
+                }
                 break;
             }
 
@@ -259,18 +327,12 @@ std::vector< c_vector<double, SPACE_DIM> > OffLatticeSimulation<ELEMENT_DIM,SPAC
         forceVector.push_back(node_iter->rGetAppliedForce()); 
     }
 
-    //std::cout << "recordForce " << forceVector[0] << std::endl;
-    //std::cout << "recordForce " << forceVector[this->mrCellPopulation.GetNumNodes()-1] << std::endl;
-
     return forceVector;
 };
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::AddForceVecWithMultiplyingFactor(std::vector< c_vector<double, SPACE_DIM> > fVec, int factor){
-
-    //std::cout << "AddForce " << fVec[0] << std::endl;
-    //std::cout << "AddForce " << fVec[this->mrCellPopulation.GetNumNodes()-1] << std::endl;
 
     int tempIteratorIndex = 0;
     for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
@@ -496,6 +558,162 @@ template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 const int& OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::GetStepper() const{
     return stepper;
 };
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void  OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeResidualAdamsM(const Vec currentGuess, Vec residualVector){
+
+    ReplicatableVector posGuess(currentGuess);
+    std::vector< c_vector<double, SPACE_DIM> > currentLocations;
+    
+    std::vector< c_vector<double, SPACE_DIM> > Fcurr = ApplyForces();
+
+    // Force a position update to the guessed locations. Store the old locations
+    int tempIteratorIndex = 0;
+    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+        ++node_iter)
+    {  
+        currentLocations.push_back(node_iter->rGetLocation());
+
+        c_vector<double, SPACE_DIM> guessLocation; 
+        for(int i=0; i<SPACE_DIM; i++){
+            guessLocation[i] = posGuess[SPACE_DIM*tempIteratorIndex + i];
+        }
+        node_iter->rGetModifiableLocation() = guessLocation;
+
+        tempIteratorIndex++;
+    }
+    std::vector< c_vector<double, SPACE_DIM> > Fguess = ApplyForces();
+    
+
+    tempIteratorIndex = 0;
+    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+         node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+         ++node_iter)
+    {     
+        c_vector<double, SPACE_DIM> posCurr = currentLocations[tempIteratorIndex];
+        node_iter->rGetModifiableLocation() = posCurr;
+
+        for(int i=0; i<SPACE_DIM; i++){
+
+            double residual_ith_cpt = posGuess[SPACE_DIM*tempIteratorIndex+i] 
+                                      - posCurr[i] 
+                                      - 0.5 * currentAMStep * (Fguess[tempIteratorIndex][i] + Fcurr[tempIteratorIndex][i]);
+
+            PetscVecTools::SetElement(residualVector, SPACE_DIM*tempIteratorIndex+i, residual_ith_cpt);
+        }
+        tempIteratorIndex++;
+    }  
+};
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeJacobianAdamsM(const Vec currentGuess, Mat* pJacobian){
+
+    unsigned num_unknowns = SPACE_DIM * this->mrCellPopulation.GetNumNodes();
+
+    // Set up working vectors
+    Vec perturbed_residual_down = PetscTools::CreateVec(num_unknowns);
+    Vec perturbed_residual_up   = PetscTools::CreateVec(num_unknowns);
+    Vec result                  = PetscTools::CreateVec(num_unknowns);
+
+    // Copy the currentGuess vector; we will perturb the copy
+    Vec current_guess_copy_up;
+    PETSCEXCEPT( VecDuplicate(currentGuess, &current_guess_copy_up) );
+    PETSCEXCEPT( VecCopy(currentGuess, current_guess_copy_up) );
+    Vec current_guess_copy_down;
+    PETSCEXCEPT( VecDuplicate(currentGuess, &current_guess_copy_down) );
+    PETSCEXCEPT( VecCopy(currentGuess, current_guess_copy_down) );
+
+    // Amount to perturb each input element by
+    double h = 1e-2;
+    double near_hsquared = 1e-3;
+
+    //\todo: is this a sufficient ownership check? Do I need to run this check on current_guess_copy_down?
+    PetscInt ilo, ihi;
+    VecGetOwnershipRange(current_guess_copy_up, &ilo, &ihi); 
+    unsigned lo = ilo;
+    unsigned hi = ihi;
+
+    // Iterate over entries in the input vector
+    for (unsigned global_index_outer = 0; global_index_outer < num_unknowns; global_index_outer++)
+    {
+        // Only perturb if we own it. Calculate residuals
+        PetscVecTools::AddToElement(current_guess_copy_up, global_index_outer, h);
+        ComputeResidualAdamsM(current_guess_copy_up, perturbed_residual_up);
+        PetscVecTools::AddToElement(current_guess_copy_down, global_index_outer, -h);
+        ComputeResidualAdamsM(current_guess_copy_down, perturbed_residual_down);
+
+        // result = (perturbed_residual_up - perturbed_residual_down) / 2*h
+        PetscVecTools::WAXPY(result, -1.0, perturbed_residual_down, perturbed_residual_up);
+        PetscVecTools::Scale(result, 1.0/(2*h));
+
+        //double maxJacobianEntry = -1e10;
+
+        double* p_result;
+        ///\todo This loop is setting the column "global_index_outer" of
+        /// the Jacobian matrix to the result vector in a non-sparse way.
+        PETSCEXCEPT( VecGetArray(result, &p_result) );
+
+        for (unsigned global_index = lo; global_index < hi; global_index++)
+        {
+            double result_entry = p_result[global_index - lo];
+
+            if (!CompareDoubles::IsNearZero(result_entry, near_hsquared))
+            {
+                PetscMatTools::SetElement(*pJacobian, global_index, global_index_outer, result_entry);
+                /*if(result_entry > maxJacobianEntry){
+                    maxJacobianEntry = result_entry;
+                }*/
+            }
+        }
+        PETSCEXCEPT( VecRestoreArray(result, &p_result) );
+
+        PetscVecTools::AddToElement(current_guess_copy_up,   global_index_outer, -h);
+        PetscVecTools::AddToElement(current_guess_copy_down, global_index_outer,  h);
+
+        //std::cout << "Max Jacobian entry: " << maxJacobianEntry << std::endl;
+    }
+
+    PetscTools::Destroy(perturbed_residual_up);
+    PetscTools::Destroy(perturbed_residual_down);
+    PetscTools::Destroy(current_guess_copy_up);
+    PetscTools::Destroy(current_guess_copy_down);
+    PetscTools::Destroy(result);
+    PetscMatTools::Finalise(*pJacobian);
+};
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+PetscErrorCode OffLatticeSimulation_AdamsM_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext)
+{
+    //Extract the simulation from the context:
+    OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext; 
+    pSim->ComputeResidualAdamsM(currentGuess, residualVector);
+    return 0;
+};
+
+#if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
+    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext)
+    {
+        //Extract the simulation from the context:
+        OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext;
+        pSim->ComputeJacobianAdamsM(currentGuess, &globalJacobian);
+        return 0;
+    };
+#else
+    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, MatStructure* pMatStructure, void* pContext)
+    {
+        //Extract the simulation from the context:
+        OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext;
+        pSim->ComputeJacobianAdamsM(currentGuess, pGlobalJacobian);
+        return 0;
+    };
+#endif
+
 
 ///////// Explicit instantiation
 template class OffLatticeSimulation<1,1>;

@@ -40,11 +40,33 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "AbstractForce.hpp"
 #include "AbstractCellPopulationBoundaryCondition.hpp"
 #include "StepperChoice.hpp"
+#include "SimpleNewtonNonlinearSolver.hpp"
 
 #include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/set.hpp>
 #include <boost/serialization/vector.hpp>
+
+
+/*
+* Residual and Jacobian functions for use in the Adams Moulton stepper
+*/
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+PetscErrorCode OffLatticeSimulation_AdamsM_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext);
+
+#if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
+
+    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
+
+#else
+
+    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
+                               MatStructure* pMatStructure, void* pContext);
+#endif
+
+
 
 /**
  * Run an off-lattice 2D or 3D cell-based simulation using a cell-centre-
@@ -94,6 +116,8 @@ private:
 
     /** Choice of timestepping scheme (Euler, RK etc) **/
     int stepper;
+
+    SimpleNewtonNonlinearSolver* pNewtonSolver;
 
 protected:
 
@@ -230,7 +254,15 @@ public:
      */
     const int& GetStepper() const;
 
+    double currentAMStep;
+    void ComputeResidualAdamsM(const Vec currentGuess, Vec residualVector);
+    void ComputeJacobianAdamsM(const Vec currentGuess, Mat* pJacobian);
+
 };
+
+
+
+
 
 // Serialization for Boost >= 1.36
 #include "SerializationExportWrapper.hpp"
