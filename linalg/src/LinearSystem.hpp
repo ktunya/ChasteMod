@@ -89,7 +89,10 @@ private:
     /** Whether we need to destroy the PETSc matrix and vector in our destructor */
     bool mDestroyMatAndVec;
 
+public:
     KSP mKspSolver;   /**< The PETSc linear solver object */
+
+private:
     bool mKspIsSetup; /**< Used by Solve method to track whether KSP has been used. */
     double mNonZerosUsed;  /**< Yes, it really is stored as a double. */
     bool mMatrixIsConstant; /**< Whether the matrix is unchanged each time Solve() is called */

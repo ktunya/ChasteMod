@@ -349,7 +349,7 @@ public:
         int stepsPerHour[12] = {10000, 5000, 2500, 1800, 1300, 590, 295, 147, 100,  75,  60,  59}; 
 
 
-        for(int i=0; i<5; i--){
+        for(int i=11; i>=0; i--){
 
             double dt = 1.0/stepsPerHour[i];
             double thresh = movThresholds[i];
@@ -379,7 +379,7 @@ public:
             // Set up cell-based simulation
             OffLatticeSimulation<3> simulator(cellPopulation, false, true, false, StepperChoice::ADAMSM);
             std::stringstream outdir;
-            outdir << "AMStepperThresh" << thresh;
+            outdir << "TestAMStepperThresh" << thresh;
             simulator.SetOutputDirectory(outdir.str());
             simulator.SetSamplingTimestepMultiple(stepsPerHour[i]);
             simulator.SetDt(dt);

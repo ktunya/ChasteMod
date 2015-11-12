@@ -57,13 +57,20 @@ PetscErrorCode OffLatticeSimulation_AdamsM_ComputeResidual(SNES snes, Vec curren
 #if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
 
     template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobianWithComparison(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
+
+    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
     PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
 
 #else
 
     template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobianWithComparison(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
+                                                                             MatStructure* pMatStructure, void* pContext);
+
+    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
     PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
-                               MatStructure* pMatStructure, void* pContext);
+                                                               MatStructure* pMatStructure, void* pContext);
 #endif
 
 
@@ -256,7 +263,10 @@ public:
 
     double currentAMStep;
     void ComputeResidualAdamsM(const Vec currentGuess, Vec residualVector);
-    void ComputeJacobianAdamsM(const Vec currentGuess, Mat* pJacobian);
+    void ComputeJacobianNumericallyAdamsM(const Vec currentGuess, Mat* pJacobian);
+    // An analytic Jacobian for GeneralizedLinearSpringForce. When this works, it should be moved
+    // out into the GeneralizedLinearSpringForce class. 
+    void ComputeDefaultJacobianGenLinearSpringForceAdamsM(const Vec currentGuess, Mat* pJacobian);
 
 };
 

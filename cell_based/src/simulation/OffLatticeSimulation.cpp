@@ -46,6 +46,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Version.hpp"
 #include "ExecutableSupport.hpp"
 #include "ReplicatableVector.hpp"
+#include "GeneralisedLinearSpringForce.hpp"
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>& rCellPopulation,
@@ -90,8 +91,8 @@ OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPo
     currentAMStep = 0;
     if(stepperChoice == StepperChoice::ADAMSM){
         pNewtonSolver = new SimpleNewtonNonlinearSolver(); 
-        pNewtonSolver->SetTolerance(1e-5);
-        //pNewtonSolver->SetWriteStats(true);
+        pNewtonSolver->SetTolerance(1e-6);
+        pNewtonSolver->SetWriteStats(true);
         currentAMStep = this->mDt;
     }
 }
@@ -211,8 +212,8 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                         tempIteratorIndex++;
                     }
 
-                    Vec solnNextTimestep = pNewtonSolver->Solve( &OffLatticeSimulation_AdamsM_ComputeResidual<ELEMENT_DIM, SPACE_DIM>,   /*Compute residual fn ptr*/
-                                                                 &OffLatticeSimulation_AdamsM_ComputeJacobian<ELEMENT_DIM, SPACE_DIM>,   /*Compute Jacobian fn ptr*/ 
+                    Vec solnNextTimestep = pNewtonSolver->Solve( &OffLatticeSimulation_AdamsM_ComputeResidual<ELEMENT_DIM, SPACE_DIM>,  /*Compute residual fn ptr*/
+                                                                 &OffLatticeSimulation_AdamsM_ComputeJacobian<ELEMENT_DIM, SPACE_DIM>, /*Compute Jacobian fn ptr*/ 
                                                                  initialCondition,   /*Current positions*/
                                                                  UINT_MAX,           /*Triggers automatic preallocation*/
                                                                  this);              /*Optional pContext containing this class*/
@@ -609,7 +610,7 @@ void  OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeResidualAdamsM(const V
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeJacobianAdamsM(const Vec currentGuess, Mat* pJacobian){
+void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeJacobianNumericallyAdamsM(const Vec currentGuess, Mat* pJacobian){
 
     unsigned num_unknowns = SPACE_DIM * this->mrCellPopulation.GetNumNodes();
 
@@ -627,8 +628,8 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeJacobianAdamsM(const Ve
     PETSCEXCEPT( VecCopy(currentGuess, current_guess_copy_down) );
 
     // Amount to perturb each input element by
-    double h = 1e-2;
-    double near_hsquared = 1e-3;
+    double h = 1e-6;
+    double near_hsquared = 1e-12;
 
     //\todo: is this a sufficient ownership check? Do I need to run this check on current_guess_copy_down?
     PetscInt ilo, ihi;
@@ -649,8 +650,6 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeJacobianAdamsM(const Ve
         PetscVecTools::WAXPY(result, -1.0, perturbed_residual_down, perturbed_residual_up);
         PetscVecTools::Scale(result, 1.0/(2*h));
 
-        //double maxJacobianEntry = -1e10;
-
         double* p_result;
         ///\todo This loop is setting the column "global_index_outer" of
         /// the Jacobian matrix to the result vector in a non-sparse way.
@@ -663,9 +662,6 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeJacobianAdamsM(const Ve
             if (!CompareDoubles::IsNearZero(result_entry, near_hsquared))
             {
                 PetscMatTools::SetElement(*pJacobian, global_index, global_index_outer, result_entry);
-                /*if(result_entry > maxJacobianEntry){
-                    maxJacobianEntry = result_entry;
-                }*/
             }
         }
         PETSCEXCEPT( VecRestoreArray(result, &p_result) );
@@ -686,6 +682,155 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeJacobianAdamsM(const Ve
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeDefaultJacobianGenLinearSpringForceAdamsM(const Vec currentGuess, Mat* pJacobian){
+
+    unsigned num_unknowns = SPACE_DIM * this->mrCellPopulation.GetNumNodes();
+    unsigned num_nodes = this->mrCellPopulation.GetNumNodes();
+    ReplicatableVector guessPositions(currentGuess);
+    double negligableCpt = 1e-10;
+
+    // Check that the force collection contains only a single GeneralizedLinearSpringForce, and extract its properties.-------------------------
+    if(mForceCollection.size()>1){
+        EXCEPTION("Adams Moulton method currently only supports a single GeneralizedLinearSpringForce.");
+    }
+    if(!bool(dynamic_cast< GeneralisedLinearSpringForce<ELEMENT_DIM, SPACE_DIM>* >(mForceCollection[0].get()) )){
+        EXCEPTION("Adams Moulton method currently only has an analytic Jacobian for the GeneralizedLinearSpringForce.");
+    }
+
+    GeneralisedLinearSpringForce<ELEMENT_DIM, SPACE_DIM>* forceLawPtr = 
+                                                dynamic_cast< GeneralisedLinearSpringForce<ELEMENT_DIM, SPACE_DIM>* >(mForceCollection[0].get());
+
+    bool useCutoff = forceLawPtr->GetUseCutOffLength();
+    double cutoff = forceLawPtr->GetCutOffLength();
+    double springConst = forceLawPtr->GetMeinekeSpringStiffness();
+    //------------------------------------------------------------------------------------------------------------------------------------------
+
+
+    // Loop over all derivative indices, calculating the Jacobian contribution from each.-------------------------------------------------------
+    // N is the node whose position we are differentiating with respect to,
+    // w is the component of that position under consideration 
+    for (unsigned deriv_index = 0; deriv_index < num_unknowns; deriv_index++) 
+    {
+        int derivCellN = (int)(deriv_index / SPACE_DIM);
+        int derivCptW = (int)(deriv_index % SPACE_DIM); 
+
+        // Loop over cell pairs
+        int AIndex = 0;
+        for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+             node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+             ++node_iter) 
+        {   
+
+            // Get properties of cell A
+            c_vector<double, SPACE_DIM> ALoc;
+            for(int i=0; i<SPACE_DIM; i++){
+                ALoc[i] = guessPositions[AIndex*SPACE_DIM + i];
+            }
+            double ARad = node_iter->GetRadius();
+            std::cout << "ARad " << ARad << std::endl;
+            double dFA_dN_cptW = 0;
+
+            int BIndex = 0;
+            for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator neighbour_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
+                 neighbour_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
+                 ++neighbour_iter)
+            {
+
+                // Get properties of cell B
+                c_vector<double, SPACE_DIM> BLoc;
+                for(int i=0; i<SPACE_DIM; i++){
+                    BLoc[i] = guessPositions[BIndex*SPACE_DIM + i];
+                }
+                double BRad = neighbour_iter->GetRadius();
+                std::cout << "BRad " << BRad << std::endl;
+
+                // Work out whether A or B is the same node as N, in which case there is a contribution to the derivative
+                bool N_equals_A = false;
+                bool N_equals_B = false;
+                if(AIndex == derivCellN){
+                    N_equals_A = true;
+                }
+                if(BIndex == derivCellN){
+                    N_equals_B = true;
+                }
+
+                if(N_equals_A || N_equals_B){
+                    
+                    // Work out whether this neighbour is close enough to actually make a contribution to the force on A,
+                    // given the currentGuess positions
+                    c_vector<double, SPACE_DIM> AtoB = BLoc - ALoc;
+                    double separation = norm_2(AtoB); 
+                    c_vector<double, SPACE_DIM> AtoB_unit = AtoB/separation;
+                    double overlap = separation - ARad - BRad;
+
+                    std::cout << "Sep " << separation << " Overlap " << overlap << std::endl;
+
+
+                    bool makesContribution = true;
+                    if(useCutoff){
+                        if(separation > cutoff){
+                            makesContribution = false;
+                        }
+                    }
+
+                    // Determine Jacobian contribution 
+                    if(makesContribution){
+
+                        double dOverlap;
+                        if(N_equals_A){
+                            dOverlap = (ALoc[derivCptW]-BLoc[derivCptW])/separation;   
+                        }
+                        if(N_equals_B){
+                            dOverlap = -(ALoc[derivCptW]-BLoc[derivCptW])/separation; 
+                        }
+
+                        double dAtoB_unit_dN_cptW; 
+                        if(N_equals_A){
+                            dAtoB_unit_dN_cptW = ( -overlap -dOverlap*(BLoc[derivCptW]-ALoc[derivCptW]) ) / (overlap*overlap);   
+                        }
+                        if(N_equals_B){
+                            dAtoB_unit_dN_cptW = ( overlap  -dOverlap*(BLoc[derivCptW]-ALoc[derivCptW]) ) / (overlap*overlap);  
+                        }
+
+                        std::cout << "dOverlap " << dOverlap << " dAtoB_unit_dN_cptW " << dAtoB_unit_dN_cptW << std::endl;
+                        if(overlap < 0){
+                            //Log part of the force law applies
+                            dFA_dN_cptW += springConst*(ARad+BRad)* ( dAtoB_unit_dN_cptW * log( 1+(overlap/(ARad+BRad)) ) +
+                                                                      AtoB_unit[derivCptW] * dOverlap * ( 1/(ARad+BRad+overlap) ) );
+                        }else{
+                            //Exponential part of the force law applies
+                            dFA_dN_cptW += springConst*(ARad+BRad)* ( dAtoB_unit_dN_cptW * overlap * exp(-5*overlap/(ARad+BRad)) + 
+                                                                      AtoB_unit[derivCptW] * ( dOverlap * exp(-5*overlap/(ARad+BRad)) + 
+                                                                      (-5*dOverlap/(ARad+BRad)) * overlap * exp(-5*overlap/(ARad+BRad)) ));
+                        }
+                    }
+                }
+
+                BIndex++;
+            }
+
+            //Add to Jacobian.
+            if (!CompareDoubles::IsNearZero(dFA_dN_cptW, negligableCpt))
+            {
+                PetscMatTools::SetElement(*pJacobian, AIndex, deriv_index, dFA_dN_cptW);
+            }
+
+            AIndex++;
+        }    
+    }
+
+    PetscMatTools::Finalise(*pJacobian); 
+
+    for (int i=0; i<num_unknowns; i++) {
+      for (int j=0; j<num_unknowns; j++) {
+        std::cout << "Jcpt " << i << " " << j << ": " << PetscMatTools::GetElement(*pJacobian,i,j) << std::endl;
+      }
+    };
+   
+};
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 PetscErrorCode OffLatticeSimulation_AdamsM_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext)
 {
     //Extract the simulation from the context:
@@ -695,23 +840,75 @@ PetscErrorCode OffLatticeSimulation_AdamsM_ComputeResidual(SNES snes, Vec curren
 };
 
 #if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
+
+    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobianWithComparison(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext)
+    {
+        //Extract the simulation from the context:
+        OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext;
+        pSim->ComputeDefaultJacobianGenLinearSpringForceAdamsM(currentGuess, &globalJacobian);
+
+        //PetscInt m;
+        //PetscInt n;
+        //MatGetLocalSize(globalJacobian, &m, &n);
+        //Mat numericalJacobian;  
+        //MatCreate(PETSC_COMM_WORLD, &numericalJacobian);
+        //MatSetSizes(numericalJacobian, m, n, m, n);   
+        //pSim->ComputeJacobianNumericallyAdamsM(currentGuess, &numericalJacobian);
+
+        //bool checkResult = PetscMatTools::CheckEquality(globalJacobian, numericalJacobian, 1e-10);
+        //if(!checkResult){
+        //    std::cout << "Analytic Jacobian does not match numerical Jacobian" << std::endl;
+        //    EXCEPTION("Analytic Jacobian does not match numerical Jacobian");
+        //}
+
+        return 0;
+    };
+
     template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
     PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext)
     {
         //Extract the simulation from the context:
         OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext;
-        pSim->ComputeJacobianAdamsM(currentGuess, &globalJacobian);
+        pSim->ComputeJacobianNumericallyAdamsM(currentGuess, &globalJacobian);
         return 0;
     };
+
 #else
+
+    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobianWithComparison(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, MatStructure* pMatStructure, void* pContext)
+    {
+        //Extract the simulation from the context:
+        OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext;
+        pSim->ComputeDefaultJacobianGenLinearSpringForceAdamsM(currentGuess, pGlobalJacobian);
+
+        //PetscInt m;
+        //PetscInt n;
+        //MatGetLocalSize(*pGlobalJacobian, &m, &n);
+        //Mat numericalJacobian;  
+        //MatCreate(PETSC_COMM_WORLD, &numericalJacobian);
+        //MatSetSizes(numericalJacobian, m, n, m, n);
+        //pSim->ComputeJacobianNumericallyAdamsM(currentGuess, &numericalJacobian);   
+        //
+        //bool checkResult = PetscMatTools::CheckEquality(*pGlobalJacobian, numericalJacobian, 1e-10);
+        //if(!checkResult){
+        //    std::cout << "Analytic Jacobian does not match numerical Jacobian" << std::endl;
+        //    EXCEPTION("Analytic Jacobian does not match numerical Jacobian");
+        //}
+
+        return 0;
+    };
+
     template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
     PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, MatStructure* pMatStructure, void* pContext)
     {
         //Extract the simulation from the context:
         OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext;
-        pSim->ComputeJacobianAdamsM(currentGuess, pGlobalJacobian);
+        pSim->ComputeJacobianNumericallyAdamsM(currentGuess, pGlobalJacobian);
         return 0;
     };
+
 #endif
 
 
