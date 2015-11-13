@@ -71,8 +71,7 @@ Vec SimplePetscNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,Ve
     SNESCreate(PETSC_COMM_WORLD, &snes);
 
     SNESSetFunction(snes, residual, pComputeResidual, pContext);
-
-    SNESSetJacobian(snes, jacobian, jacobian, /*pComputeJacobian*/  SNESComputeJacobianDefault , pContext);
+    SNESSetJacobian(snes, jacobian, jacobian, pComputeJacobian, pContext);
 
 #if (PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR >= 4) //PETSc 3.4 or later
     SNESSetType(snes, SNESNEWTONLS);
@@ -89,11 +88,6 @@ Vec SimplePetscNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,Ve
 #endif
     SNESLineSearchSetType(linesearch, "bt"); //Use backtracking search as default
 
-    PetscViewer linesearchViewer;
-    PetscViewerCreate(PETSC_COMM_WORLD, &linesearchViewer);
-    PetscViewerSetType(linesearchViewer, PETSCVIEWERASCII);
-    SNESLineSearchView(linesearch, linesearchViewer);
-
     // x is the iteration vector SNES uses when solving, set equal to initialGuess to start with
     Vec x;
 
@@ -102,9 +96,6 @@ Vec SimplePetscNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,Ve
 
     KSP ksp;
     SNESGetKSP(snes,&ksp);
-    //KSPMonitorSet(ksp, KSPMonitorDefault, NULL, 0);
-    //SNESMonitorSet(snes, SNESMonitorDefault, NULL, 0);
-
     SNESSetFromOptions(snes);
 
 #if (PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR >= 5)
