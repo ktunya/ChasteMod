@@ -52,8 +52,13 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "SmartPointers.hpp"
 #include "StochasticDurationCellCycleModel.hpp"
 #include "RandomNumberGenerator.hpp"
-#include "PetscSetupAndFinalize.hpp"
 #include "DetailedCellTracker.hpp"
+
+//#include "PetscSetupAndFinalize.hpp"
+
+#include "PetscSetupUtils.hpp"
+#include <petsc.h>
+#include "PetscException.hpp"
 
 
 class TestAlternativeTimesteppers : public AbstractCellBasedWithTimingsTestSuite
@@ -341,15 +346,17 @@ public:
     };
  
 
-    void Test3dNodeBasedWithAMStepper() throw (Exception)
+    void Test3dNodeBasedWithBackwardEulerStepper() throw (Exception)
     {
+
+        PetscSetupUtils::CommonSetup();
         
         double movThresholds[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
         // Predetermined minimum steps per hour for each mov threshold
         int stepsPerHour[12] = {10000, 5000, 2500, 1800, 1300, 590, 295, 147, 100,  75,  60,  59}; 
 
 
-        for(int i=11; i>=0; i--){
+        for(int i=5; i>=0; i--){
 
             double dt = 1.0/stepsPerHour[i];
             double thresh = movThresholds[i];
@@ -377,9 +384,9 @@ public:
             cellPopulation.SetDampingConstantNormal(1.0);
 
             // Set up cell-based simulation
-            OffLatticeSimulation<3> simulator(cellPopulation, false, true, false, StepperChoice::ADAMSM);
+            OffLatticeSimulation<3> simulator(cellPopulation, false, true, false, StepperChoice::BACKEULER);
             std::stringstream outdir;
-            outdir << "TestAMStepperThresh" << thresh;
+            outdir << "BackwardEulerStepperThresh" << thresh;
             simulator.SetOutputDirectory(outdir.str());
             simulator.SetSamplingTimestepMultiple(stepsPerHour[i]);
             simulator.SetDt(dt);
@@ -406,11 +413,13 @@ public:
             {
                 delete nodes[i];
             }     
-        } 
+        }
+
+        PetscSetupUtils::CommonFinalize(); 
     }
 
 
-    void Test3dNodeBasedWithAMStepperAdaptive() throw (Exception)
+    void Test3dNodeBasedWithBackwardEulerStepperAdaptive() throw (Exception)
     {
         /*
         double movThresholds[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
@@ -445,9 +454,9 @@ public:
             cellPopulation.SetAbsoluteMovementThreshold(thresh);
 
             // Set up cell-based simulation
-            OffLatticeSimulation<3> simulator(cellPopulation, false, true, true, StepperChoice::ADAMSM);
+            OffLatticeSimulation<3> simulator(cellPopulation, false, true, true, StepperChoice::BACKEULER);
             std::stringstream outdir;
-            outdir << "AdaptiveAMStepperThresh" << thresh;
+            outdir << "AdaptiveBackwardEulerStepperThresh" << thresh;
             simulator.SetOutputDirectory(outdir.str());
             simulator.SetSamplingTimestepMultiple(stepsPerHour[i]);
             simulator.SetDt(dt);

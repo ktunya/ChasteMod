@@ -39,25 +39,16 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Exception.hpp"
 
 SimpleNewtonNonlinearSolver::SimpleNewtonNonlinearSolver()
-        : mTolerance(1e-5),
-        mWriteStats(false)
+    : mTolerance(1e-5),
+      mWriteStats(false)
 {
-    /*mTestDampingValues.push_back(-0.1);
+    mTestDampingValues.push_back(-0.1);
     mTestDampingValues.push_back(0.05);
-    for (unsigned i=1; i<=12; i++)*/
-    /*{
+    for (unsigned i=1; i<=12; i++)
+    {
         double val = double(i)/10;
         mTestDampingValues.push_back(val);
-    }*/
-
-    mTestDampingValues.push_back(1);
-    mTestDampingValues.push_back(0.5);
-    mTestDampingValues.push_back(0.1);
-    mTestDampingValues.push_back(0.05);
-    mTestDampingValues.push_back(0.01);
-    mTestDampingValues.push_back(0.005);
-    mTestDampingValues.push_back(0.001);
-    mTestDampingValues.push_back(0.0005);
+    }
 }
 
 SimpleNewtonNonlinearSolver::~SimpleNewtonNonlinearSolver()
@@ -82,9 +73,6 @@ Vec SimpleNewtonNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,V
 
     // The "false" says that we are allowed to do new mallocs without PETSc 3.3 causing an error
     LinearSystem linear_system(current_solution, fill, false);
-
-    //linear_system.SetKspType(KSPPREONLY);
-    //linear_system.SetPcType(PCLU);
 
     (*pComputeResidual)(NULL, current_solution, linear_system.rGetRhsVector(), pContext);
 
@@ -115,21 +103,15 @@ Vec SimpleNewtonNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,V
         (*pComputeJacobian)(NULL, current_solution, &(linear_system.rGetLhsMatrix()), NULL, NULL, pContext);
 #endif
 
-        Mat J = linear_system.GetLhsMatrix();
-        MatMumpsSetIcntl(J, 14, 100);
-        MatMumpsSetIcntl(J, 6, 7);
-        MatMumpsSetIcntl(J, 28, 2);
-        MatMumpsSetIcntl(J, 29, 2);
-
         Vec negative_update = linear_system.Solve();
 
         Vec test_vec;
         VecDuplicate(initialGuess, &test_vec);
 
-        double best_damping_factor = 1;
+        double best_damping_factor = 1.0;
         double best_scaled_residual = 1e20; // large
 
-        /*// Loop over all the possible damping value and determine which gives smallest residual
+        // Loop over all the possible damping value and determine which gives smallest residual
         for (unsigned i=0; i<mTestDampingValues.size(); i++)
         {
             // Note: WAXPY calls VecWAXPY(w,a,x,y) which computes w = ax+y
@@ -158,16 +140,7 @@ Vec SimpleNewtonNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,V
 
             // Raise error
             EXCEPTION("Iteration " << counter << ", unable to find damping factor such that residual decreases in update direction");
-        }*/
-
-        // Note: WAXPY calls VecWAXPY(w,a,x,y) which computes w = ax+y
-        PetscVecTools::WAXPY(test_vec,-best_damping_factor,negative_update,current_solution);
-
-        // Compute new residual
-        linear_system.ZeroLinearSystem();
-        (*pComputeResidual)(NULL, test_vec, linear_system.rGetRhsVector(), pContext);
-        VecNorm(linear_system.rGetRhsVector(), NORM_2, &residual_norm);
-        scaled_residual_norm = residual_norm/size;
+        }
 
         if (mWriteStats)
         {

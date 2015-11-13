@@ -119,8 +119,23 @@ const char ChasteCitation[] = "@article{mirams2013chaste,\n"
 void PetscSetupUtils::InitialisePetsc()
 {
     // The CommandLineArguments instance is filled in by the cxxtest test suite runner.
-    CommandLineArguments* p_args = CommandLineArguments::Instance();
-    PETSCEXCEPT(PetscInitialize(p_args->p_argc, p_args->p_argv, PETSC_NULL, PETSC_NULL));
+    //CommandLineArguments* p_args = CommandLineArguments::Instance();
+    char _ptmp0[64] = "./run";
+    char _ptmp1[64] = "-ksp_type";
+    char _ptmp2[64] = "preonly";
+    char _ptmp3[64] = "-pc_type";
+    char _ptmp4[64] = "lu";
+    char _ptmp5[64] = "-pc_factor_mat_solver_package";
+    char _ptmp6[64] = "umfpack";
+    char _ptmp7[64] = "-snes_converged_reason";
+    
+    int petsc_argc = 8;
+    char *petsc_argv[8] = { _ptmp0, _ptmp1, _ptmp2, _ptmp3, _ptmp4, _ptmp5, _ptmp6, _ptmp7 };  
+    
+    char **petsc_argv_ptr = &petsc_argv[0];
+
+    //PETSCEXCEPT(PetscInitialize(p_args->p_argc, p_args->p_argv, PETSC_NULL, PETSC_NULL));
+    PETSCEXCEPT(PetscInitialize(&petsc_argc, &petsc_argv_ptr, PETSC_NULL, PETSC_NULL));
 }
 
 

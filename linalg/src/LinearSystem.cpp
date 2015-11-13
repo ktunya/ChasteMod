@@ -695,10 +695,6 @@ Vec LinearSystem::Solve(Vec lhsGuess)
 
         KSPCreate(PETSC_COMM_WORLD, &mKspSolver);
 
-        PetscViewer monviewer;
-        PetscViewerASCIIOpen(PetscObjectComm((PetscObject)mKspSolver), "stdout", &monviewer);
-        KSPMonitorSet(mKspSolver, KSPMonitorDefault, monviewer, (PetscErrorCode (*)(void**))PetscViewerDestroy);
-
         const bool is_small = (mSize <= 6); ///\todo This is a magic number.  Do we want a warning here?
 
 #if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR >= 5 ) //PETSc 3.5 or later

@@ -71,7 +71,8 @@ Vec SimplePetscNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,Ve
     SNESCreate(PETSC_COMM_WORLD, &snes);
 
     SNESSetFunction(snes, residual, pComputeResidual, pContext);
-    SNESSetJacobian(snes, jacobian, jacobian, pComputeJacobian, pContext);
+
+    SNESSetJacobian(snes, jacobian, jacobian, /*pComputeJacobian*/  SNESComputeJacobianDefault , pContext);
 
 #if (PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR >= 4) //PETSc 3.4 or later
     SNESSetType(snes, SNESNEWTONLS);
@@ -80,15 +81,18 @@ Vec SimplePetscNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,Ve
 #endif
 
     SNESSetTolerances(snes,1.0e-5,1.0e-5,1.0e-5,PETSC_DEFAULT,PETSC_DEFAULT);
+    SNESLineSearch linesearch;
 #if (PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR == 3) //PETSc 3.3
-    SNESLineSearch linesearch;
     SNESGetSNESLineSearch(snes, &linesearch);
-    SNESLineSearchSetType(linesearch, "bt"); //Use backtracking search as default
 #elif (PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR >= 4) //PETSc 3.4 or later
-    SNESLineSearch linesearch;
-    SNESGetLineSearch(snes, &linesearch);
-    SNESLineSearchSetType(linesearch, "bt"); //Use backtracking search as default
+    SNESGetLineSearch(snes, &linesearch);    
 #endif
+    SNESLineSearchSetType(linesearch, "bt"); //Use backtracking search as default
+
+    PetscViewer linesearchViewer;
+    PetscViewerCreate(PETSC_COMM_WORLD, &linesearchViewer);
+    PetscViewerSetType(linesearchViewer, PETSCVIEWERASCII);
+    SNESLineSearchView(linesearch, linesearchViewer);
 
     // x is the iteration vector SNES uses when solving, set equal to initialGuess to start with
     Vec x;
@@ -96,13 +100,18 @@ Vec SimplePetscNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,Ve
     VecDuplicate(initialGuess, &x);
     VecCopy(initialGuess, x);
 
+    KSP ksp;
+    SNESGetKSP(snes,&ksp);
+    //KSPMonitorSet(ksp, KSPMonitorDefault, NULL, 0);
+    //SNESMonitorSet(snes, SNESMonitorDefault, NULL, 0);
+
+    SNESSetFromOptions(snes);
+
 #if (PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR >= 5)
     // Seems to want the preconditioner to be explicitly set to none now
     // Copied this from the similar PETSc example at:
     // http://www.mcs.anl.gov/petsc/petsc-current/src/snes/examples/tutorials/ex1.c
     // Which got it to work...
-    KSP ksp;
-    SNESGetKSP(snes,&ksp);
     PC pc;
     KSPGetPC(ksp,&pc);
     PCSetType(pc,PCNONE);

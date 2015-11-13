@@ -40,7 +40,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "AbstractForce.hpp"
 #include "AbstractCellPopulationBoundaryCondition.hpp"
 #include "StepperChoice.hpp"
-#include "SimpleNewtonNonlinearSolver.hpp"
+#include "SimplePetscNonlinearSolver.hpp"
 
 #include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
@@ -52,24 +52,17 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 * Residual and Jacobian functions for use in the Adams Moulton stepper
 */
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-PetscErrorCode OffLatticeSimulation_AdamsM_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext);
+PetscErrorCode OffLatticeSimulation_BACKEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext);
 
 #if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
 
     template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobianWithComparison(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
-
-    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
+    PetscErrorCode OffLatticeSimulation_BACKEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
 
 #else
 
     template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobianWithComparison(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
-                                                                             MatStructure* pMatStructure, void* pContext);
-
-    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_AdamsM_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
+    PetscErrorCode OffLatticeSimulation_BACKEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
                                                                MatStructure* pMatStructure, void* pContext);
 #endif
 
@@ -123,8 +116,6 @@ private:
 
     /** Choice of timestepping scheme (Euler, RK etc) **/
     int stepper;
-
-    SimpleNewtonNonlinearSolver* pNewtonSolver;
 
 protected:
 
@@ -261,13 +252,10 @@ public:
      */
     const int& GetStepper() const;
 
-    double currentAMStep;
-    void ComputeResidualAdamsM(const Vec currentGuess, Vec residualVector);
-    void ComputeJacobianNumericallyAdamsM(const Vec currentGuess, Mat* pJacobian);
-    // An analytic Jacobian for GeneralizedLinearSpringForce. When this works, it should be moved
-    // out into the GeneralizedLinearSpringForce class. 
-    void ComputeDefaultJacobianGenLinearSpringForceAdamsM(const Vec currentGuess, Mat* pJacobian);
-
+    double currentImplicitStep;
+    void ComputeResidualBACKEULER(const Vec currentGuess, Vec residualVector);
+    void ComputeJacobianNumericallyBACKEULER(const Vec currentGuess, Mat* pJacobian);
+    SimplePetscNonlinearSolver* pNonlinearSolver;
 };
 
 
