@@ -34,6 +34,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "AbstractCentreBasedCellPopulation.hpp"
+#include "StepSizeException.hpp"
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::AbstractCentreBasedCellPopulation( AbstractMesh<ELEMENT_DIM, SPACE_DIM>& rMesh,
@@ -170,9 +171,16 @@ void AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::UpdateNodeLocati
         c_vector<double,SPACE_DIM> displacement=dt*this->GetNode(node_index)->rGetAppliedForce()/damping_const;
 
         // Throws an exception if the cell movement goes beyond mAbsoluteMovementThreshold
-        if (norm_2(displacement) > this->mAbsoluteMovementThreshold)
+        double dist = norm_2(displacement);
+        if (dist > this->mAbsoluteMovementThreshold)
         {
-            throw (int)ceil(norm_2(displacement)); //Approx displacement is communicated to the simulation.
+            std::ostringstream message;
+            message << "Cells are moving by: " << dist;
+            message << ", which is more than the AbsoluteMovementThreshold. Use a smaller timestep to avoid this exception.";
+            
+            double newStep = 0.95*dt*(this->mAbsoluteMovementThreshold/dist);
+            bool terminate = true;
+            throw new StepSizeException(dist, newStep, message.str(), terminate);
         }
 
         // Get new node location

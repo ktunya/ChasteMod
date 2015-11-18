@@ -52,17 +52,17 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 * Residual and Jacobian functions for use in the Adams Moulton stepper
 */
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-PetscErrorCode OffLatticeSimulation_BACKEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext);
+PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext);
 
 #if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
 
     template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_BACKEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
+    PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
 
 #else
 
     template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_BACKEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
+    PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
                                                                MatStructure* pMatStructure, void* pContext);
 #endif
 

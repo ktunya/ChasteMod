@@ -33,8 +33,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#ifndef DetailedCellTracker_HPP_
-#define DetailedCellTracker_HPP_
+#ifndef SIMPLECELLCENTREPOSITIONTRACKER_HPP_
+#define SIMPLECELLCENTREPOSITIONTRACKER_HPP_
 
 #include "AbstractCellBasedSimulationModifier.hpp"
 #include "OutputFileHandler.hpp"
@@ -44,11 +44,13 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <boost/serialization/string.hpp>
 
 /**
- * A modifier class that every mInterval simulation timesteps, saves to a file some
- * C. elegans germline properties. Obviously only relevant for doing C. elegans germ line simulations
+ * A simple modifier that outputs cell IDs and the position of cell centres. Good
+ * for plotting and comparing cell positions easily between simulation runs.
+ * interval = number of timesteps between data outputs
+ * cellInterval = what proportion of cells to track
  */
 template<unsigned DIM>
-class DetailedCellTracker : public AbstractCellBasedSimulationModifier<DIM,DIM>
+class SimpleCellCentrePositionTracker : public AbstractCellBasedSimulationModifier<DIM,DIM>
 {
 
 private:
@@ -61,31 +63,34 @@ private:
         archive & boost::serialization::base_object<AbstractCellBasedSimulationModifier<DIM,DIM> >(*this);
     }
 
-    //Output file stream
-    out_stream OutputFile;
+    // Output file stream
+    out_stream outputFile;
     
-    //Number of timesteps between data recordings
-    int mInterval;
+    // Number of timesteps between data recordings
+    int interval;
 
-    //Spacing between which cells to track
-    int mCellInterval;
+    // Spacing between which cells to track
+    int cellInterval;
+
+    // Full path to output file
+    std::string outputDir;
 
 public:
 
 
     //Constructor 
-    DetailedCellTracker(int interval, int cellInterval);
-
+    SimpleCellCentrePositionTracker(int samplingInterval, int samplingCellInterval);
 
     //Destructor
-    virtual ~DetailedCellTracker();
+    virtual ~SimpleCellCentrePositionTracker();
 
 
-    //Getters for private members
+    //Getters
     int GetInterval() const;
 
-    //Getters for private members
     int GetCellInterval() const;
+
+    std::string GetOutputDirectoryFull();
 
 
     /**
@@ -109,7 +114,6 @@ public:
      void SetupSolve(AbstractCellPopulation<DIM,DIM>& rCellPopulation, std::string outputDirectory);
 
 
-
      //Output any parameters associated with this class
      void OutputSimulationModifierParameters(out_stream& rParamsFile);
 
@@ -117,18 +121,18 @@ public:
 
 
 #include "SerializationExportWrapper.hpp"
-EXPORT_TEMPLATE_CLASS_SAME_DIMS(DetailedCellTracker)
+EXPORT_TEMPLATE_CLASS_SAME_DIMS(SimpleCellCentrePositionTracker)
 
 namespace boost
 {
     namespace serialization
     {
         /**
-        * Serialize information required to construct a DetailedCellTracker.
+        * Serialize information required to construct a SimpleCellCentrePositionTracker.
         */
         template<class Archive, unsigned DIM>
         inline void save_construct_data(
-            Archive & ar, const DetailedCellTracker<DIM> * t, const BOOST_PFTO unsigned int file_version)
+            Archive & ar, const SimpleCellCentrePositionTracker<DIM> * t, const BOOST_PFTO unsigned int file_version)
         {
             // Save data required to construct instance
             int interval = t->GetInterval();
@@ -138,11 +142,11 @@ namespace boost
         }
 
         /**
-        * De-serialize constructor parameters and initialise a DetailedCellTracker.
+        * De-serialize constructor parameters and initialise a SimpleCellCentrePositionTracker.
         */
         template<class Archive, unsigned DIM>
         inline void load_construct_data(
-            Archive & ar, DetailedCellTracker<DIM> * t, const unsigned int file_version)
+            Archive & ar, SimpleCellCentrePositionTracker<DIM> * t, const unsigned int file_version)
         {
             // Retrieve data from archive required to construct new instance
             int interval;
@@ -150,10 +154,9 @@ namespace boost
             int cellInterval;
             ar >> cellInterval;
 
-            // Invoke inplace constructor to initialise instance
-            ::new(t)DetailedCellTracker<DIM>(interval, cellInterval);
+            ::new(t)SimpleCellCentrePositionTracker<DIM>(interval, cellInterval);
         }
     }
 } // namespace ...
 
-#endif /*DetailedCellTracker_HPP_*/
+#endif /*SIMPLECELLCENTREPOSITIONTRACKER_HPP_*/
