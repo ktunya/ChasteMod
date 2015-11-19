@@ -40,6 +40,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ChasteSyscalls.hpp"
 #include "IsNan.hpp"
 #include "ShortAxisVertexBasedDivisionRule.hpp"
+#include "StepSizeException.hpp"
 
 // Cell writers
 #include "CellAgesWriter.hpp"
@@ -264,6 +265,9 @@ unsigned VertexBasedCellPopulation<DIM>::RemoveDeadCells()
 template<unsigned DIM>
 void VertexBasedCellPopulation<DIM>::UpdateNodeLocations(double dt)
 {
+    bool respondToThresholdExceeded = false;
+    double exceededDisp; 
+
     // Iterate over all nodes associated with real cells to update their positions
     for (unsigned node_index=0; node_index<GetNumNodes(); node_index++)
     {
@@ -280,15 +284,16 @@ void VertexBasedCellPopulation<DIM>::UpdateNodeLocations(double dt)
          * rearrangement threshold and warn the user that a smaller timestep should be used. This
          * restriction ensures that vertex elements remain well defined (see #1376).
          */
-        if (norm_2(displacement) > 0.5*mpMutableVertexMesh->GetCellRearrangementThreshold())
+        double dist = norm_2(displacement); 
+        if (dist > 0.5*mpMutableVertexMesh->GetCellRearrangementThreshold())
         {
-            WARN_ONCE_ONLY("Vertices are moving more than half the CellRearrangementThreshold. This could cause elements to become inverted so the motion has been restricted. Use a smaller timestep to avoid these warnings.");
+            respondToThresholdExceeded = true;
+            exceededDisp = dist;
             displacement *= 0.5*mpMutableVertexMesh->GetCellRearrangementThreshold()/norm_2(displacement);
         }
 
         // Get new node location
         c_vector<double, DIM> new_node_location = this->GetNode(node_index)->rGetLocation() + displacement;
-
         for (unsigned i=0; i<DIM; i++)
         {
             assert(!std::isnan(new_node_location(i)));
@@ -296,9 +301,23 @@ void VertexBasedCellPopulation<DIM>::UpdateNodeLocations(double dt)
 
         // Create ChastePoint for new node location
         ChastePoint<DIM> new_point(new_node_location);
-
         // Move the node
         this->SetNode(node_index, new_point);
+    }
+
+    if(respondToThresholdExceeded){
+
+        std::ostringstream message;
+        message << "Vertices are moving more than half the CellRearrangementThreshold. This could cause elements to become inverted";
+        message << "so the motion has been restricted. Use a smaller timestep to avoid these warnings.";
+
+        double suggestedStep = 0.95*dt*((0.5*mpMutableVertexMesh->GetCellRearrangementThreshold())/exceededDisp);
+
+        bool terminate = false;
+
+        std::cout << "VERTEX BASED THROWS EXCEPTION, displacement " << exceededDisp << ", max is " << 0.5*mpMutableVertexMesh->GetCellRearrangementThreshold() << std::endl;
+
+        throw new StepSizeException(exceededDisp, suggestedStep, message.str(), terminate);
     }
 }
 
