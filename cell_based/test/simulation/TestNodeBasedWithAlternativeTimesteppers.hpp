@@ -62,7 +62,7 @@ class TestNodeBasedWithAlternativeTimesteppers : public AbstractCellBasedWithTim
 public:
     
     enum RunChoices {EULER, RK4, BACKWARDEULER, ALL};
-    static const int toRun = BACKWARDEULER;
+    static const int toRun = EULER;
 
     // We want to compare various timestepping methods with forward Euler here, including RK4, and implicit
     // methods, to see whether performance improves. RK4 etc are more work per step than forward Euler, so 
@@ -117,7 +117,7 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
 
-                if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
+                //if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
 
                 delete nodes[0];
                 delete nodes[1];
@@ -169,7 +169,7 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
 
-                if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
+                //if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
 
                 delete nodes[0];
                 delete nodes[1];
@@ -221,7 +221,7 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
 
-                if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
+                //if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
 
                 delete nodes[0];
                 delete nodes[1];
@@ -274,7 +274,7 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
 
-                if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
+                //if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
 
                 delete nodes[0];
                 delete nodes[1];
@@ -326,7 +326,7 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
 
-                if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
+                //if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
 
                 delete nodes[0];
                 delete nodes[1];
@@ -379,7 +379,7 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
 
-                if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
+                //if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
 
                 delete nodes[0];
                 delete nodes[1];
@@ -407,8 +407,8 @@ public:
 
     void setupTestParameters(){ 
         
-        minStepIndex = 1;
-        maxStepIndex = 1;
+        minStepIndex = 0;
+        maxStepIndex = 11;
         endTime = 100;
  
         double threshes[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};

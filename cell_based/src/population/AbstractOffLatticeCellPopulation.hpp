@@ -127,6 +127,18 @@ public:
      */
     virtual void SetNode(unsigned nodeIndex, ChastePoint<SPACE_DIM>& rNewLocation)=0;
 
+
+    /*
+    * Checks whether a movement of size "displacement" violates the movement threshold
+    * for this population. If so, a stepSizeException is thrown that contains a suggestion
+    * for a smaller dt that may avoid the exception.
+    *
+    * @param displacement the movement of the node at this time step
+    * @param dt the current time step
+    * @param nodeIndex index of the node in question (allows us to check whether this is a ghost or particle)
+    */
+    virtual void CheckForStepSizeException(double displacement, double dt, unsigned nodeIndex) = 0;
+
     /**
      * Update the location of each node in the cell population given
      * a vector of forces on nodes and a time step over which to

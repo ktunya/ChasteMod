@@ -194,12 +194,28 @@ public:
      */
     virtual std::set<unsigned> GetNeighbouringLocationIndices(CellPtr pCell);
 
+    /*
+    * Overriden CheckForStepSizeException() method
+    *
+    * Checks whether a movement of size "displacement" violates the movement threshold
+    * for this population. If so, a stepSizeException is thrown that contains a suggestion
+    * for a smaller dt that may avoid the exception.
+    *
+    * @param displacement the movement of the node at this time step
+    * @param dt the current time step
+    * @param nodeIndex index of the node in question (allows us to check whether this is a ghost or particle)
+    */
+    virtual void CheckForStepSizeException(double displacement, double dt, unsigned nodeIndex);
+
+
     /**
-     * Overridden UpdateNodeLocations() method.
+     * Overridden UpdateNodeLocations() method. Now does nothing, since node updates are handled
+     * by AltMethodsTimestepper for AbstractCentreBasedPopulations.
      *
      * @param dt the time step
      */
     virtual void UpdateNodeLocations(double dt);
+
 
     /**
      * Overridden GetDampingConstant() method.

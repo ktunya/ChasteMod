@@ -45,8 +45,6 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "LogFile.hpp"
 #include "Version.hpp"
 #include "ExecutableSupport.hpp"
-#include "ReplicatableVector.hpp"
-#include "GeneralisedLinearSpringForce.hpp"
 #include "StepSizeException.hpp"
 #include "Warnings.hpp" 
 
@@ -57,9 +55,14 @@ OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPo
                                                 bool initialiseCells,
                                                 bool adaptiveChoice,
                                                 int  stepperChoice)
-    : AbstractCellBasedSimulation<ELEMENT_DIM,SPACE_DIM>(rCellPopulation, deleteCellPopulationInDestructor, initialiseCells),
-    adaptive(adaptiveChoice),
-    stepper(stepperChoice)
+    : AbstractCellBasedSimulation<ELEMENT_DIM,SPACE_DIM>(
+        rCellPopulation,
+        deleteCellPopulationInDestructor,
+        initialiseCells),
+      adaptive(adaptiveChoice),
+      stepper(stepperChoice),
+      timestepper(AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>( static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>&>(rCellPopulation), 
+                                                       mForceCollection ))
 {
 
     if (!dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&rCellPopulation))
@@ -88,14 +91,6 @@ OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPo
         // i.e. if you want to use this class with your own subclass of AbstractOffLatticeCellPopulation, then simply
         // comment out the line below
         NEVER_REACHED;
-    }
-
-    // Setup for implicit solver, if required
-    pNonlinearSolver = NULL;
-    currentImplicitStep = 0;
-    if(stepperChoice == StepperChoice::BACKWARDEULER){
-        pNonlinearSolver = new SimplePetscNonlinearSolver(); 
-        currentImplicitStep = this->mDt;
     }
 }
 
@@ -126,13 +121,6 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::RemoveAllCellPopulationBoundar
 
 
 
-
-
-
-
-
-
-
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology()
 {
@@ -141,14 +129,10 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
     double targetDt = this->mDt;
     double currentStepSize = targetDt;
 
-    double safetyFactor = 0.95;
-    double movementThreshold = dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>* >(&(this->mrCellPopulation))
-                               ->GetAbsoluteMovementThreshold();
+    // Try to update positions
+    CellBasedEventHandler::BeginEvent(CellBasedEventHandler::POSITION);
 
     while(timeAdvanced < targetDt){
-            
-        // Try to update positions
-        CellBasedEventHandler::BeginEvent(CellBasedEventHandler::POSITION);
 
         // Store the initial node positions (these may be needed when applying boundary conditions)    
         std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations;
@@ -161,123 +145,8 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
 
         try{
 
-            switch( stepper ){
-                
-                case StepperChoice::EULER :
-                {
-                    std::vector< c_vector<double, SPACE_DIM> > F = ApplyForces();
-                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
-                                                                        ->UpdateNodeLocations(currentStepSize);
-                }
-                break;
-                
-                case StepperChoice::RK4 :
-                {
-                    std::vector< c_vector<double, SPACE_DIM> > K1 = ApplyForces(); 
-                    //K1 is now stored in the population forces
-                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
-                                                                        ->UpdateNodeLocations(currentStepSize/2.0);
-                
-                    std::vector< c_vector<double, SPACE_DIM> > K2 = ApplyForces(); 
-                    //K2 is now stored in the population forces                                                    
-                    RevertToOldLocations(old_node_locations);
-                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
-                                                                        ->UpdateNodeLocations(currentStepSize/2.0);
-                    
-                    std::vector< c_vector<double, SPACE_DIM> > K3 = ApplyForces(); 
-                    //K3 is now stored in the population forces
-                    RevertToOldLocations(old_node_locations);
-                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
-                                                                        ->UpdateNodeLocations(currentStepSize);
-                    
-                    std::vector< c_vector<double, SPACE_DIM> > K4 = ApplyForces(); 
-                    //K4 is now stored in the population forces
-                    //Reapply the other K contributions...
-                    RevertToOldLocations(old_node_locations);
-                    AddForceVecWithMultiplyingFactor(K1,1);
-                    AddForceVecWithMultiplyingFactor(K2,2);
-                    AddForceVecWithMultiplyingFactor(K3,2);
-                    static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))
-                                                                        ->UpdateNodeLocations(currentStepSize/6.0);                                                        
-                }           
-                break;
-
-                case StepperChoice::BACKWARDEULER:
-                {
-                    // Work out system properties
-                    currentImplicitStep = currentStepSize;
-
-                    int cellCount = this->mrCellPopulation.GetNumNodes();
-                    unsigned systemSize = cellCount * SPACE_DIM;
-
-                    // Setup an initial condition consisting of current node positions
-                    Vec initialCondition = PetscTools::CreateAndSetVec(systemSize, 0.0);
-
-                    std::vector< c_vector<double, SPACE_DIM> > F = ApplyForces();
-                    double EulerInitialStep = 0.005;
-
-                    int tempIteratorIndex = 0;
-                    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-                        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-                        ++node_iter)
-                    {
-                        double damping = static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))->GetDampingConstant(node_iter->GetIndex());
-                        c_vector<double, SPACE_DIM> location = node_iter->rGetLocation();
-                        for(int i=0; i<SPACE_DIM; i++){
-                            PetscVecTools::SetElement(initialCondition, SPACE_DIM*tempIteratorIndex+i, location[i]+EulerInitialStep*F[tempIteratorIndex][i]/damping);
-                        }
-                        tempIteratorIndex++;
-                    }
-
-                    // Call nonlinear solver to find root of rN+1 -rN -dt F(rN+1):
-                    Vec solnNextTimestep = pNonlinearSolver->Solve( &OffLatticeSimulation_BACKWARDEULER_ComputeResidual<ELEMENT_DIM, SPACE_DIM>,  
-                                                                    SNESComputeJacobianDefault,  
-                                                                    initialCondition,   
-                                                                    UINT_MAX,          
-                                                                    this);              
-
-
-                    // Unpack solution. For now we still check whether the movement threshold is violated and lower dt if so.
-                    ReplicatableVector solnNextTimestepRepl(solnNextTimestep);
-
-                    tempIteratorIndex = 0;
-                    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-                        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-                        ++node_iter)
-                    {
-                        // Calculate displacment
-                        c_vector<double, SPACE_DIM> oldLocation = node_iter->rGetLocation();
-                        c_vector<double, SPACE_DIM> newLocation;
-                        double displacement = 0;
-                        for(int i=0; i<SPACE_DIM; i++){
-                            newLocation[i] = solnNextTimestepRepl[SPACE_DIM*tempIteratorIndex+i];
-                            displacement += (oldLocation[i] - newLocation[i]) * (oldLocation[i] - newLocation[i]);
-                        }
-                        
-                        // Check for movement threshold violation
-                        displacement = pow(displacement, 0.5);
-                        if (displacement > movementThreshold) {
-
-                            double newStepSuggestion = 0.95*currentStepSize*(movementThreshold/displacement);
-
-                            std::ostringstream message;
-                            message << "Cells are moving by: " << displacement;
-                            message << ", which is more than the AbsoluteMovementThreshold. Use a smaller timestep to avoid this exception.";
-                            throw new StepSizeException(displacement, newStepSuggestion, message.str(), true);
-                        }
-
-                        // If no violation, move node to new location 
-                        node_iter->rGetModifiableLocation() = newLocation;
-                        tempIteratorIndex++;
-                    }
-
-                    // Cleanup
-                    PetscTools::Destroy(initialCondition);
-                    
-                }
-                break;
-            }
-
+            timestepper.UpdateAllNodePositions(currentStepSize, stepper);
+            
             ApplyBoundaries(old_node_locations);
 
             // Successful timestep. Update totalTimeAdvanced and increase the timestep by 1% if possible 
@@ -286,7 +155,7 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                 currentStepSize = fmin(1.01*currentStepSize, targetDt-timeAdvanced);
             }
 
-        }catch(StepSizeException e){
+        }catch(StepSizeException* e){
 
             if(adaptive){
 
@@ -294,24 +163,21 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                 // Revert nodes to their old positions.
                 RevertToOldLocations(old_node_locations);
                 // Estimate the largest permissible / remaining timestep. 
-                currentStepSize = fmin(e.suggestedNewStep, targetDt-timeAdvanced); 
+                currentStepSize = fmin(e->suggestedNewStep, targetDt-timeAdvanced); 
 
             }else{
                 // Adaptive set to false. Crash / display the usual error.
-                if(e.endSimulation){
-                    EXCEPTION(e.what());
+                if(e->endSimulation){
+                    EXCEPTION(e->what());
                 }else{
-                    WARN_ONCE_ONLY(e.what());
+                    WARN_ONCE_ONLY(e->what());
                 }
             }
         }
-
-        CellBasedEventHandler::EndEvent(CellBasedEventHandler::POSITION);
     }
 
+    CellBasedEventHandler::EndEvent(CellBasedEventHandler::POSITION);
 }
-
-
 
 
 
@@ -329,7 +195,7 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::RevertToOldLocations(std::map<
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-std::vector< c_vector<double, SPACE_DIM> > OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ApplyForces(){
+void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ApplyForces(){
 
     CellBasedEventHandler::BeginEvent(CellBasedEventHandler::FORCE);
 
@@ -351,34 +217,7 @@ std::vector< c_vector<double, SPACE_DIM> > OffLatticeSimulation<ELEMENT_DIM,SPAC
 
     CellBasedEventHandler::EndEvent(CellBasedEventHandler::FORCE);
 
-    // Store a force vector in case the stepper requires it.  
-    std::vector< c_vector<double,SPACE_DIM> > forceVector;
-    forceVector.reserve(this->mrCellPopulation.GetNumNodes());
-
-    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-         node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-         ++node_iter)
-    {
-        forceVector.push_back(node_iter->rGetAppliedForce()); 
-    }
-
-    return forceVector;
 };
-
-
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::AddForceVecWithMultiplyingFactor(std::vector< c_vector<double, SPACE_DIM> > fVec, int factor){
-
-    int tempIteratorIndex = 0;
-    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-        ++node_iter)
-    {
-        c_vector<double, SPACE_DIM> force = factor * fVec[tempIteratorIndex];
-        (node_iter)->AddAppliedForceContribution( force );
-        tempIteratorIndex++;
-    }
-}
 
 
 
@@ -596,161 +435,6 @@ template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 const int& OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::GetStepper() const{
     return stepper;
 };
-
-
-
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-void  OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeResidualBACKEULER(const Vec currentGuess, Vec residualVector){
-
-    // Extract current guess locations, and create a vector to store the current locations
-    ReplicatableVector guessPositions(currentGuess);
-    std::vector< c_vector<double, SPACE_DIM> > currentLocations;
-
-    // Store current locations and update node positions to the guessed locations. 
-    int tempIteratorIndex = 0;
-    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-        node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-        ++node_iter)
-    {  
-        currentLocations.push_back(node_iter->rGetLocation());
-
-        c_vector<double, SPACE_DIM> guessLocation; 
-        for(int i=0; i<SPACE_DIM; i++){
-            guessLocation[i] = guessPositions[SPACE_DIM*tempIteratorIndex + i];
-        }
-        node_iter->rGetModifiableLocation() = guessLocation;
-
-        tempIteratorIndex++;
-    }
-    // Get force assuming guess locations
-    std::vector< c_vector<double, SPACE_DIM> > Fguess = ApplyForces();
-    
-    // Calculate residual, and revert locations as you go.
-    tempIteratorIndex = 0;
-    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->mrCellPopulation.rGetMesh().GetNodeIteratorBegin();
-         node_iter != this->mrCellPopulation.rGetMesh().GetNodeIteratorEnd();
-         ++node_iter)
-    {     
-        c_vector<double, SPACE_DIM> currentPosition = currentLocations[tempIteratorIndex];
-        node_iter->rGetModifiableLocation() = currentPosition;
-
-        for(int i=0; i<SPACE_DIM; i++){
-
-            double damping = static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))->GetDampingConstant(node_iter->GetIndex());
-
-            double residual_ith_cpt = guessPositions[SPACE_DIM*tempIteratorIndex+i] 
-                                      - currentPosition[i] 
-                                      - currentImplicitStep * Fguess[tempIteratorIndex][i]/damping;
-
-            PetscVecTools::SetElement(residualVector, SPACE_DIM*tempIteratorIndex+i, residual_ith_cpt);
-        }
-        tempIteratorIndex++;
-    }  
-};
-
-
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::ComputeJacobianNumericallyBACKEULER(const Vec currentGuess, Mat* pJacobian){
-
-    unsigned num_unknowns = SPACE_DIM * this->mrCellPopulation.GetNumNodes();
-
-    // Set up working vectors
-    Vec perturbed_residual_down = PetscTools::CreateVec(num_unknowns);
-    Vec perturbed_residual_up   = PetscTools::CreateVec(num_unknowns);
-    Vec result                  = PetscTools::CreateVec(num_unknowns);
-
-    // Copy the currentGuess vector; we will perturb the copy
-    Vec current_guess_copy_up;
-    PETSCEXCEPT( VecDuplicate(currentGuess, &current_guess_copy_up) );
-    PETSCEXCEPT( VecCopy(currentGuess, current_guess_copy_up) );
-    Vec current_guess_copy_down;
-    PETSCEXCEPT( VecDuplicate(currentGuess, &current_guess_copy_down) );
-    PETSCEXCEPT( VecCopy(currentGuess, current_guess_copy_down) );
-
-    // Amount to perturb each input element by
-    double h = 1e-6;
-    double near_hsquared = 1e-12;
-
-    PetscInt ilo, ihi;
-    VecGetOwnershipRange(current_guess_copy_up, &ilo, &ihi); 
-    unsigned lo = ilo;
-    unsigned hi = ihi;
-
-    // Iterate over entries in the input vector
-    for (unsigned global_index_outer = 0; global_index_outer < num_unknowns; global_index_outer++)
-    {
-        // Only perturb if we own it. Calculate residuals
-        PetscVecTools::AddToElement(current_guess_copy_up, global_index_outer, h);
-        ComputeResidualBACKEULER(current_guess_copy_up, perturbed_residual_up);
-        PetscVecTools::AddToElement(current_guess_copy_down, global_index_outer, -h);
-        ComputeResidualBACKEULER(current_guess_copy_down, perturbed_residual_down);
-
-        // result = (perturbed_residual_up - perturbed_residual_down) / 2*h
-        PetscVecTools::WAXPY(result, -1.0, perturbed_residual_down, perturbed_residual_up);
-        PetscVecTools::Scale(result, 1.0/(2*h));
-
-        double* p_result;
-        ///\todo This loop is setting the column "global_index_outer" of
-        /// the Jacobian matrix to the result vector in a non-sparse way.
-        PETSCEXCEPT( VecGetArray(result, &p_result) );
-
-        for (unsigned global_index = lo; global_index < hi; global_index++)
-        {
-            double result_entry = p_result[global_index - lo];
-
-            if (!CompareDoubles::IsNearZero(result_entry, near_hsquared))
-            {
-                PetscMatTools::SetElement(*pJacobian, global_index, global_index_outer, result_entry);
-            }
-        }
-        PETSCEXCEPT( VecRestoreArray(result, &p_result) );
-
-        PetscVecTools::AddToElement(current_guess_copy_up,   global_index_outer, -h);
-        PetscVecTools::AddToElement(current_guess_copy_down, global_index_outer,  h);
-    }
-
-    PetscTools::Destroy(perturbed_residual_up);
-    PetscTools::Destroy(perturbed_residual_down);
-    PetscTools::Destroy(current_guess_copy_up);
-    PetscTools::Destroy(current_guess_copy_down);
-    PetscTools::Destroy(result);
-    PetscMatTools::Finalise(*pJacobian);
-};
-
-
-
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext)
-{
-    //Extract the simulation from the context:
-    OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext; 
-    pSim->ComputeResidualBACKEULER(currentGuess, residualVector);
-    return 0;
-};
-
-#if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
-
-    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext)
-    {
-        //Extract the simulation from the context:
-        OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext;
-        pSim->ComputeJacobianNumericallyBACKEULER(currentGuess, &globalJacobian);
-        return 0;
-    };
-
-#else
-
-    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, MatStructure* pMatStructure, void* pContext)
-    {
-        //Extract the simulation from the context:
-        OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>* pSim = (OffLatticeSimulation<ELEMENT_DIM, SPACE_DIM>*)pContext;
-        pSim->ComputeJacobianNumericallyBACKEULER(currentGuess, pGlobalJacobian);
-        return 0;
-    };
-
-#endif
 
 
 ///////// Explicit instantiation

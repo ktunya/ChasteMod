@@ -262,6 +262,13 @@ unsigned VertexBasedCellPopulation<DIM>::RemoveDeadCells()
     return num_removed;
 }
 
+
+template<unsigned DIM>
+void VertexBasedCellPopulation<DIM>::CheckForStepSizeException(double displacement, double dt, unsigned nodeIndex){
+
+};
+
+
 template<unsigned DIM>
 void VertexBasedCellPopulation<DIM>::UpdateNodeLocations(double dt)
 {
@@ -308,14 +315,12 @@ void VertexBasedCellPopulation<DIM>::UpdateNodeLocations(double dt)
     if(respondToThresholdExceeded){
 
         std::ostringstream message;
-        message << "Vertices are moving more than half the CellRearrangementThreshold. This could cause elements to become inverted";
+        message << "Vertices are moving more than half the CellRearrangementThreshold. This could cause elements to become inverted ";
         message << "so the motion has been restricted. Use a smaller timestep to avoid these warnings.";
 
         double suggestedStep = 0.95*dt*((0.5*mpMutableVertexMesh->GetCellRearrangementThreshold())/exceededDisp);
 
         bool terminate = false;
-
-        std::cout << "VERTEX BASED THROWS EXCEPTION, displacement " << exceededDisp << ", max is " << 0.5*mpMutableVertexMesh->GetCellRearrangementThreshold() << std::endl;
 
         throw new StepSizeException(exceededDisp, suggestedStep, message.str(), terminate);
     }

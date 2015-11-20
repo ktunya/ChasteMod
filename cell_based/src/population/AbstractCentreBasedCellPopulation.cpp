@@ -154,45 +154,29 @@ std::set<unsigned> AbstractCentreBasedCellPopulation<ELEMENT_DIM,SPACE_DIM>::Get
 }
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::CheckForStepSizeException(double displacement, 
+                                                                                          double dt, 
+                                                                                          unsigned nodeIndex)
+{
+    if (displacement > this->GetAbsoluteMovementThreshold() && !IsGhostNode(nodeIndex) && !IsParticle(nodeIndex))
+    {
+        std::ostringstream message;
+        message << "Cells are moving by " << displacement;
+        message << ", which is more than the AbsoluteMovementThreshold: use a smaller timestep to avoid this exception.";
+        
+        double newStep = 0.95*dt*(this->GetAbsoluteMovementThreshold()/displacement);
+        bool terminate = true;
+
+        throw new StepSizeException(displacement, newStep, message.str(), terminate);
+    }
+};
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::UpdateNodeLocations(double dt)
 {
-    // Iterate over all nodes associated with real cells to update their positions
-    for (typename AbstractCellPopulation<ELEMENT_DIM, SPACE_DIM>::Iterator cell_iter = this->Begin();
-         cell_iter != this->End();
-         ++cell_iter)
-    {
-        // Get index of node associated with cell
-        unsigned node_index = this->GetLocationIndexUsingCell((*cell_iter));
-
-        // Get damping constant for node
-        double damping_const = this->GetDampingConstant(node_index);
-
-        // Get displacement
-        c_vector<double,SPACE_DIM> displacement=dt*this->GetNode(node_index)->rGetAppliedForce()/damping_const;
-
-        // Throws an exception if the cell movement goes beyond mAbsoluteMovementThreshold
-        double dist = norm_2(displacement);
-        if (dist > this->mAbsoluteMovementThreshold)
-        {
-            std::ostringstream message;
-            message << "Cells are moving by: " << dist;
-            message << ", which is more than the AbsoluteMovementThreshold. Use a smaller timestep to avoid this exception.";
-            
-            double newStep = 0.95*dt*(this->mAbsoluteMovementThreshold/dist);
-            bool terminate = true;
-            throw new StepSizeException(dist, newStep, message.str(), terminate);
-        }
-
-        // Get new node location
-        c_vector<double, SPACE_DIM> new_node_location = this->GetNode(node_index)->rGetLocation() + displacement;
-
-        // Create ChastePoint for new node location
-        ChastePoint<SPACE_DIM> new_point(new_node_location);
-
-        // Move the node
-        this->SetNode(node_index, new_point);
-    }
 }
+
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 double AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::GetDampingConstant(unsigned nodeIndex)

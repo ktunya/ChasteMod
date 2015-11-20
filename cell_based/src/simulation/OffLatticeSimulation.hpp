@@ -36,37 +36,16 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef OFFLATTICESIMULATION_HPP_
 #define OFFLATTICESIMULATION_HPP_
 
+#include "AltMethodsTimestepper.hpp"
 #include "AbstractCellBasedSimulation.hpp"
 #include "AbstractForce.hpp"
 #include "AbstractCellPopulationBoundaryCondition.hpp"
 #include "StepperChoice.hpp"
-#include "SimplePetscNonlinearSolver.hpp"
 
 #include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/set.hpp>
 #include <boost/serialization/vector.hpp>
-
-
-/*
-* Residual and Jacobian functions for use in the Adams Moulton stepper
-*/
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext);
-
-#if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
-
-    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat globalJacobian, Mat preconditioner, void* pContext);
-
-#else
-
-    template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-    PetscErrorCode OffLatticeSimulation_BACKWARDEULER_ComputeJacobian(SNES snes, Vec currentGuess, Mat* pGlobalJacobian, Mat* pPreconditioner, 
-                                                               MatStructure* pMatStructure, void* pContext);
-#endif
-
-
 
 /**
  * Run an off-lattice 2D or 3D cell-based simulation using a cell-centre-
@@ -117,6 +96,8 @@ private:
     /** Choice of timestepping scheme (Euler, RK etc) **/
     int stepper;
 
+    AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM> timestepper;
+
 protected:
 
     /** The mechanics used to determine the new location of the cells, a list of the forces. */
@@ -138,14 +119,9 @@ protected:
     void RevertToOldLocations(std::map<Node<SPACE_DIM>*, c_vector<double, SPACE_DIM> > old_node_locations);
 
     /*
-    * Applies a contribution from each AbstractForce. Returns force vector.
+    * Applies a contribution from each AbstractForce.
     */
-    std::vector< c_vector<double, SPACE_DIM> > ApplyForces();
-
-    /*
-    * Adds a force contribution to each node as specified in fMap, scaled by a factor
-    */
-    void AddForceVecWithMultiplyingFactor(std::vector< c_vector<double, SPACE_DIM> > fVec, int factor);
+    void ApplyForces();
 
     /**
      * Applies any boundary conditions.
@@ -252,10 +228,6 @@ public:
      */
     const int& GetStepper() const;
 
-    double currentImplicitStep;
-    void ComputeResidualBACKEULER(const Vec currentGuess, Vec residualVector);
-    void ComputeJacobianNumericallyBACKEULER(const Vec currentGuess, Mat* pJacobian);
-    SimplePetscNonlinearSolver* pNonlinearSolver;
 };
 
 
