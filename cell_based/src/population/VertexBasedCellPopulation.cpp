@@ -265,7 +265,7 @@ unsigned VertexBasedCellPopulation<DIM>::RemoveDeadCells()
 
 template<unsigned DIM>
 void VertexBasedCellPopulation<DIM>::CheckForStepSizeException(double displacement, double dt, unsigned nodeIndex){
-
+    
 };
 
 

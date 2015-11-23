@@ -38,6 +38,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "StepperChoice.hpp"
 #include "StepSizeException.hpp"
 #include "AbstractCentreBasedCellPopulation.hpp"
+#include "MeshBasedCellPopulationWithGhostNodes.hpp"
+#include "NodeBasedCellPopulationWithParticles.hpp"
 #include "CellBasedEventHandler.hpp"
 #include "ReplicatableVector.hpp"
 #include "PetscVecTools.hpp"
@@ -54,6 +56,18 @@ rForceCollection( inputForceCollection )
 	}else{
 		nonEulerSteppersEnabled = false;
 	}
+
+    if(dynamic_cast<MeshBasedCellPopulationWithGhostNodes<SPACE_DIM>*>(&rCellPopulation)){
+        ghostNodeForcesEnabled = true;
+    }else{
+        ghostNodeForcesEnabled = false;
+    }
+
+    if(dynamic_cast<NodeBasedCellPopulationWithParticles<SPACE_DIM>*>(&rCellPopulation)){
+        particleForcesEnabled = true;
+    }else{
+        particleForcesEnabled = false;
+    }
 
 	pNonlinearSolver = new SimplePetscNonlinearSolver();
 	implicitStepSize = 0;
@@ -81,6 +95,14 @@ std::vector<c_vector<double, SPACE_DIM> > AltMethodsTimestepper<ELEMENT_DIM,SPAC
         iter != rForceCollection.end(); ++iter)
     {
         (*iter)->AddForceContribution(rCellPopulation);
+    }
+
+    // Here deal with forces on non-cell nodes (ghosts and particles)
+    if(ghostNodeForcesEnabled){
+        dynamic_cast<MeshBasedCellPopulationWithGhostNodes<SPACE_DIM>*>(&rCellPopulation)->ApplyGhostForces();
+    }
+    if(particleForcesEnabled){
+        dynamic_cast<NodeBasedCellPopulationWithParticles<SPACE_DIM>*>(&rCellPopulation)->ApplyParticleForces();
     }
 
     CellBasedEventHandler::EndEvent(CellBasedEventHandler::FORCE);
@@ -140,7 +162,9 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
                     c_vector<double, SPACE_DIM> newLocation = oldLocation + dt * F[index]/damping;
                     
                     rCellPopulation.CheckForStepSizeException(norm_2(newLocation-oldLocation), dt, node_iter->GetIndex());
-    	        	node_iter->rGetModifiableLocation() = newLocation;
+    	        	
+                    ChastePoint<SPACE_DIM> new_point(newLocation);
+                    rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
     	        }
     	        
     		}
@@ -155,7 +179,9 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	     		 node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
     	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-    	        	node_iter->rGetModifiableLocation() = node_iter->rGetLocation() + dt * K1[index]/(damping*2.0);
+    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * K1[index]/(damping*2.0);
+                    ChastePoint<SPACE_DIM> new_point(newLocation);
+                    rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
     	        }
     	        
     	        std::vector< c_vector<double, SPACE_DIM> > K2 = ComputeAndSaveForces(); 
@@ -165,8 +191,10 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	     		 node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
     	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-    	        	node_iter->rGetModifiableLocation() = node_iter->rGetLocation() + dt * (K2[index] - K1[index])/(damping*2.0); //revert, then update
-    	        }
+    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * (K2[index] - K1[index])/(damping*2.0); //revert, then update
+    	            ChastePoint<SPACE_DIM> new_point(newLocation);
+                    rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
+                }
     	                
     	        std::vector< c_vector<double, SPACE_DIM> > K3 = ComputeAndSaveForces(); 
 
@@ -175,8 +203,10 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	     		 node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
     	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-    	        	node_iter->rGetModifiableLocation() = node_iter->rGetLocation() + dt * (K3[index] - K2[index]/2.0) /damping; //revert, then update
-    	        }
+    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * (K3[index] - K2[index]/2.0) /damping; //revert, then update
+                    ChastePoint<SPACE_DIM> new_point(newLocation);
+                    rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
+                }
     	                
     	        std::vector< c_vector<double, SPACE_DIM> > K4 = ComputeAndSaveForces(); 
 
@@ -191,7 +221,8 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        	c_vector<double, SPACE_DIM> newLocation = oldLocation + dt * (effectiveForce/damping); 
                     
                     rCellPopulation.CheckForStepSizeException(norm_2(newLocation-oldLocation), dt, node_iter->GetIndex());
-                    node_iter->rGetModifiableLocation() = newLocation;
+                    ChastePoint<SPACE_DIM> new_point(newLocation);
+                    rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
 
                     //Ensure the nodes hold accurate forces, incase they're accessed by some other class
     	        	node_iter->ClearAppliedForce();
@@ -246,7 +277,8 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	            }
     	            
                     rCellPopulation.CheckForStepSizeException(norm_2(newLocation-oldLocation), dt, node_iter->GetIndex());
-                    node_iter->rGetModifiableLocation() = newLocation;
+                    ChastePoint<SPACE_DIM> new_point(newLocation);
+                    rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
     	            
                     node_iter->ClearAppliedForce();
     	            c_vector<double, SPACE_DIM> effectiveForce = (damping/dt)*(newLocation-oldLocation);

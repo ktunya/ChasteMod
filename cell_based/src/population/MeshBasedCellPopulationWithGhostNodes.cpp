@@ -141,7 +141,7 @@ void MeshBasedCellPopulationWithGhostNodes<DIM>::SetGhostNodes(const std::set<un
 }
 
 template<unsigned DIM>
-void MeshBasedCellPopulationWithGhostNodes<DIM>::UpdateGhostPositions(double dt)
+void MeshBasedCellPopulationWithGhostNodes<DIM>::ApplyGhostForces()
 {
     // Initialise vector of forces on ghost nodes
     std::vector<c_vector<double, DIM> > drdt(this->GetNumNodes());
@@ -176,7 +176,7 @@ void MeshBasedCellPopulationWithGhostNodes<DIM>::UpdateGhostPositions(double dt)
             }
         }
     }
-
+    
     for (typename AbstractMesh<DIM,DIM>::NodeIterator node_iter = this->mrMesh.GetNodeIteratorBegin();
          node_iter != this->mrMesh.GetNodeIteratorEnd();
          ++node_iter)
@@ -184,8 +184,8 @@ void MeshBasedCellPopulationWithGhostNodes<DIM>::UpdateGhostPositions(double dt)
         unsigned node_index = node_iter->GetIndex();
         if (this->mIsGhostNode[node_index])
         {
-            ChastePoint<DIM> new_point(node_iter->rGetLocation() + dt*drdt[node_index]);
-            static_cast<MutableMesh<DIM, DIM>&>((this->mrMesh)).SetNode(node_index, new_point, false);
+            node_iter->ClearAppliedForce();
+            node_iter->AddAppliedForceContribution(drdt[node_index]);
         }
     }
 }
@@ -326,11 +326,6 @@ void MeshBasedCellPopulationWithGhostNodes<DIM>::AcceptCellWritersAcrossPopulati
 template<unsigned DIM>
 void MeshBasedCellPopulationWithGhostNodes<DIM>::UpdateNodeLocations(double dt)
 {
-    // First update ghost positions first because they do not affect the real cells
-    UpdateGhostPositions(dt);
-
-    // Then call the base class method
-    AbstractCentreBasedCellPopulation<DIM,DIM>::UpdateNodeLocations(dt);
 }
 
 

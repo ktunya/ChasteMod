@@ -133,32 +133,8 @@ void NodeBasedCellPopulationWithParticles<DIM>::SetParticles(const std::set<unsi
 }
 
 template<unsigned DIM>
-void NodeBasedCellPopulationWithParticles<DIM>::UpdateParticlePositions(double dt)
+void NodeBasedCellPopulationWithParticles<DIM>::ApplyParticleForces()
 {
-    // Initialise vector of forces on particles
-    std::vector<c_vector<double, DIM> > drdt(this->GetNumNodes());
-    for (unsigned i=0; i<drdt.size(); i++)
-    {
-        drdt[i] = zero_vector<double>(DIM);
-    }
-
-    // Calculate forces on particles
-    double damping_constant = this->GetDampingConstantNormal();
-    for (unsigned i=0; i<drdt.size(); i++)
-    {
-        drdt[i] = this->GetNode(i)->rGetAppliedForce()/damping_constant;
-    }
-
-    for (typename AbstractMesh<DIM,DIM>::NodeIterator node_iter = this->mrMesh.GetNodeIteratorBegin();
-         node_iter != this->mrMesh.GetNodeIteratorEnd();
-         ++node_iter)
-    {
-        if (node_iter->IsParticle())
-        {
-            ChastePoint<DIM> new_point(node_iter->rGetLocation() + dt*drdt[node_iter->GetIndex()]);
-            node_iter->SetPoint(new_point);
-        }
-    }
 }
 
 template<unsigned DIM>
@@ -223,7 +199,7 @@ template<unsigned DIM>
 void NodeBasedCellPopulationWithParticles<DIM>::UpdateNodeLocations(double dt)
 {
     // First update particle positions
-    UpdateParticlePositions(dt);
+    //UpdateParticlePositions(dt);
 
     // Then call the base class method
     AbstractCentreBasedCellPopulation<DIM>::UpdateNodeLocations(dt);

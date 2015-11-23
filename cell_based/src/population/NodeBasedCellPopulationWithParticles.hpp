@@ -116,11 +116,9 @@ public:
     NodeBasedCellPopulationWithParticles(NodesOnlyMesh<DIM>& rMesh);
 
     /**
-     * Update particle positions.
-     *
-     * @param dt
+     * Update particle forces
      */
-    void UpdateParticlePositions(double dt);
+    void ApplyParticleForces();
 
     /**
      * Update mIsParticle if required by a remesh.

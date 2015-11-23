@@ -158,7 +158,7 @@ void AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::CheckForStepSize
                                                                                           double dt, 
                                                                                           unsigned nodeIndex)
 {
-    if (displacement > this->GetAbsoluteMovementThreshold() && !IsGhostNode(nodeIndex) && !IsParticle(nodeIndex))
+    if (displacement > this->GetAbsoluteMovementThreshold() && !this->IsGhostNode(nodeIndex) && !this->IsParticle(nodeIndex))
     {
         std::ostringstream message;
         message << "Cells are moving by " << displacement;
@@ -181,14 +181,21 @@ void AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::UpdateNodeLocati
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 double AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::GetDampingConstant(unsigned nodeIndex)
 {
-    CellPtr p_cell = this->GetCellUsingLocationIndex(nodeIndex);
-    if (p_cell->GetMutationState()->IsType<WildTypeCellMutationState>() && !p_cell->HasCellProperty<CellLabel>())
-    {
+
+    if(this->IsGhostNode(nodeIndex) || this->IsParticle(nodeIndex)){
         return this->GetDampingConstantNormal();
-    }
-    else
-    {
-        return this->GetDampingConstantMutant();
+    }else{
+
+        CellPtr p_cell = this->GetCellUsingLocationIndex(nodeIndex);
+        if (p_cell->GetMutationState()->IsType<WildTypeCellMutationState>() && !p_cell->HasCellProperty<CellLabel>())
+        {
+            return this->GetDampingConstantNormal();
+        }
+        else
+        {
+            return this->GetDampingConstantMutant();
+        }
+    
     }
 }
 

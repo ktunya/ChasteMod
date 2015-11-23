@@ -56,6 +56,8 @@ private:
 	std::vector<c_vector<double, SPACE_DIM> > SaveCurrentLocations();
 
 	bool nonEulerSteppersEnabled; 
+	bool ghostNodeForcesEnabled;
+	bool particleForcesEnabled;
 
 public:	
 	

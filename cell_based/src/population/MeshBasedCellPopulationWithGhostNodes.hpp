@@ -191,12 +191,11 @@ public:
     std::set<unsigned> GetGhostNodeIndices();
 
     /**
-     * Update the GhostNode positions using the spring force model with rest length=1.
+     * Update the GhostNode forces using a spring force model with rest length=1.
      * Forces are applied to ghost nodes from connected ghost and normal nodes.
      *
-     * @param dt
      */
-    void UpdateGhostPositions(double dt);
+    void ApplyGhostForces();
 
     /**
      * Update mIsGhostNode if required by a remesh.
