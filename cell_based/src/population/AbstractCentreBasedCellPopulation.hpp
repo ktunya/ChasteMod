@@ -195,17 +195,17 @@ public:
     virtual std::set<unsigned> GetNeighbouringLocationIndices(CellPtr pCell);
 
     /*
-    * Overriden CheckForStepSizeException() method
+    * Overriden FindAndAddressStepSizeExceptions() method
     *
-    * Checks whether a movement of size "displacement" violates the movement threshold
-    * for this population. If so, a stepSizeException is thrown that contains a suggestion
-    * for a smaller dt that may avoid the exception.
+    * Checks whether a given node displacement violates the movement threshold set
+    * for this population. If so, a stepSizeException is ultimately generated that contains 
+    * a warning/error message and a suggestion for a smaller dt that should avoid the problem.
     *
     * @param displacement the movement of the node at this time step
     * @param dt the current time step
     * @param nodeIndex index of the node in question (allows us to check whether this is a ghost or particle)
     */
-    virtual void CheckForStepSizeException(double displacement, double dt, unsigned nodeIndex);
+    virtual void FindAndAddressStepSizeExceptions(c_vector<double,SPACE_DIM>* displacement, double dt, unsigned nodeIndex);
 
 
     /**

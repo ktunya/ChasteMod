@@ -37,7 +37,9 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "AbstractMesh.hpp"
 #include "StepperChoice.hpp"
 #include "StepSizeException.hpp"
+#include "Warnings.hpp"
 #include "AbstractCentreBasedCellPopulation.hpp"
+#include "NodeBasedCellPopulationWithBuskeUpdate.hpp"
 #include "MeshBasedCellPopulationWithGhostNodes.hpp"
 #include "NodeBasedCellPopulationWithParticles.hpp"
 #include "CellBasedEventHandler.hpp"
@@ -51,10 +53,11 @@ AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::AltMethodsTimestepper( AbstractOff
 :rCellPopulation( inputCellPopulation ),
 rForceCollection( inputForceCollection )
 {	
-	if(dynamic_cast<AbstractCentreBasedCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&rCellPopulation)){
-		nonEulerSteppersEnabled = true;
-	}else{
+	if(dynamic_cast<NodeBasedCellPopulationWithBuskeUpdate<SPACE_DIM>*>(&rCellPopulation)){
 		nonEulerSteppersEnabled = false;
+        WARNING("Non-Euler steppers are not yet implemented for NodeBasedCellPopulationWithBuskeUpdate");
+	}else{
+		nonEulerSteppersEnabled = true;
 	}
 
     if(dynamic_cast<MeshBasedCellPopulationWithGhostNodes<SPACE_DIM>*>(&rCellPopulation)){
@@ -159,10 +162,12 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
                     
                     c_vector<double, SPACE_DIM> oldLocation = node_iter->rGetLocation();
-                    c_vector<double, SPACE_DIM> newLocation = oldLocation + dt * F[index]/damping;
-                    
-                    rCellPopulation.CheckForStepSizeException(norm_2(newLocation-oldLocation), dt, node_iter->GetIndex());
-    	        	
+                    c_vector<double, SPACE_DIM> displacement = dt * F[index]/damping;
+
+                    HandleStepSizeExceptions(&displacement, dt, node_iter->GetIndex());
+
+                    c_vector<double, SPACE_DIM> newLocation = oldLocation + displacement;
+                      	        	
                     ChastePoint<SPACE_DIM> new_point(newLocation);
                     rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
     	        }
@@ -218,9 +223,11 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        	c_vector<double, SPACE_DIM> effectiveForce = (K1[index] + 2*K2[index] + 2*K3[index] + K4[index] )/6.0;
 
                     c_vector<double, SPACE_DIM> oldLocation = node_iter->rGetLocation() - dt * K3[index]/damping;
-    	        	c_vector<double, SPACE_DIM> newLocation = oldLocation + dt * (effectiveForce/damping); 
+                    c_vector<double, SPACE_DIM> displacement =  dt * (effectiveForce/damping);
+
+                    HandleStepSizeExceptions(&displacement, dt, node_iter->GetIndex());
+    	        	c_vector<double, SPACE_DIM> newLocation = oldLocation + displacement; 
                     
-                    rCellPopulation.CheckForStepSizeException(norm_2(newLocation-oldLocation), dt, node_iter->GetIndex());
                     ChastePoint<SPACE_DIM> new_point(newLocation);
                     rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
 
@@ -270,18 +277,19 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	            double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
 
     	            c_vector<double, SPACE_DIM> oldLocation = initialLocations[index];
-    	            c_vector<double, SPACE_DIM> newLocation;
-    	            
+    	            c_vector<double, SPACE_DIM> newLocation;      
     	            for(int i=0; i<SPACE_DIM; i++){
     	                newLocation[i] = solnNextTimestepRepl[SPACE_DIM * index + i];
     	            }
     	            
-                    rCellPopulation.CheckForStepSizeException(norm_2(newLocation-oldLocation), dt, node_iter->GetIndex());
+                    c_vector<double, SPACE_DIM> displacement = rCellPopulation.rGetMesh().GetVectorFromAtoB(oldLocation, newLocation);
+                    HandleStepSizeExceptions(&displacement, dt, node_iter->GetIndex());
+
                     ChastePoint<SPACE_DIM> new_point(newLocation);
                     rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
     	            
                     node_iter->ClearAppliedForce();
-    	            c_vector<double, SPACE_DIM> effectiveForce = (damping/dt)*(newLocation-oldLocation);
+    	            c_vector<double, SPACE_DIM> effectiveForce = (damping/dt)*displacement;
     	            node_iter->AddAppliedForceContribution(effectiveForce);
     	        }
 
@@ -297,6 +305,22 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
 	}
 };	
 
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::HandleStepSizeExceptions(c_vector<double,SPACE_DIM>* displacement, double dt, unsigned nodeIndex){
+    
+    try{
+        rCellPopulation.FindAndAddressStepSizeExceptions(displacement, dt, nodeIndex);
+    
+    }catch(StepSizeException* e){
+
+        if(!(e->isTerminal)){
+            WARN_ONCE_ONLY(e->what());
+        }else{
+            throw e;
+        }
+    }   
+}
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
@@ -336,7 +360,6 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::BACKWARDEULERComputeResidual(
         }
     } 
 };
-
 
 
 ///////// Explicit instantiation

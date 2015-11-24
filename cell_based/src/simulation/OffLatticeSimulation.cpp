@@ -166,12 +166,8 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
                 currentStepSize = fmin(e->suggestedNewStep, targetDt-timeAdvanced); 
 
             }else{
-                // Adaptive set to false. Crash / display the usual error.
-                if(e->endSimulation){
-                    EXCEPTION(e->what());
-                }else{
-                    WARN_ONCE_ONLY(e->what());
-                }
+                // Adaptive set to false. Crash displaying the usual error.
+                EXCEPTION(e->what());
             }
         }
     }

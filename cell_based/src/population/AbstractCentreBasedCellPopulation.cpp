@@ -154,20 +154,22 @@ std::set<unsigned> AbstractCentreBasedCellPopulation<ELEMENT_DIM,SPACE_DIM>::Get
 }
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-void AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::CheckForStepSizeException(double displacement, 
-                                                                                          double dt, 
-                                                                                          unsigned nodeIndex)
+void AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>::FindAndAddressStepSizeExceptions(c_vector<double,SPACE_DIM>* displacement, 
+                                                                                                 double dt, 
+                                                                                                 unsigned nodeIndex)
 {
-    if (displacement > this->GetAbsoluteMovementThreshold() && !this->IsGhostNode(nodeIndex) && !this->IsParticle(nodeIndex))
+    double length = norm_2(*displacement);
+
+    if (length > this->GetAbsoluteMovementThreshold() && !this->IsGhostNode(nodeIndex) && !this->IsParticle(nodeIndex))
     {
         std::ostringstream message;
-        message << "Cells are moving by " << displacement;
+        message << "Cells are moving by " << length;
         message << ", which is more than the AbsoluteMovementThreshold: use a smaller timestep to avoid this exception.";
         
-        double newStep = 0.95*dt*(this->GetAbsoluteMovementThreshold()/displacement);
+        double newStep = 0.95*dt*(this->GetAbsoluteMovementThreshold()/length);
         bool terminate = true;
 
-        throw new StepSizeException(displacement, newStep, message.str(), terminate);
+        throw new StepSizeException(length, newStep, message.str(), terminate);
     }
 };
 

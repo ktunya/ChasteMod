@@ -33,58 +33,46 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#ifndef ALTMETHODSTIMESTEPPER_HPP_
-#define ALTMETHODSTIMESTEPPER_HPP_
+#ifndef POPULATIONTESTINGFORCE_HPP_
+#define POPULATIONTESTINGFORCE_HPP_
 
-#include "AbstractOffLatticeCellPopulation.hpp"
 #include "AbstractForce.hpp"
-#include "SimplePetscNonlinearSolver.hpp"
-
-
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-class AltMethodsTimestepper {
-
-private:
-
-	AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>&                  rCellPopulation;
-	std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >&  rForceCollection;
-
-	SimplePetscNonlinearSolver* pNonlinearSolver;
-	double implicitStepSize;
-
-	bool nonEulerSteppersEnabled; 
-	bool ghostNodeForcesEnabled;
-	bool particleForcesEnabled;
-
-	std::vector<c_vector<double, SPACE_DIM> > ComputeAndSaveForces();
-	std::vector<c_vector<double, SPACE_DIM> > SaveCurrentLocations();
-
-	void HandleStepSizeExceptions(c_vector<double,SPACE_DIM>* displacement, double dt, unsigned nodeIndex);
-
-public:	
-	
-	AltMethodsTimestepper(AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>&  inputCellPopulation, 
-                std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >&  inputForceCollection);
-
-	~AltMethodsTimestepper();
-
-	void UpdateAllNodePositions(double dt, int stepper);
-
-	void BACKWARDEULERComputeResidual(const Vec currentGuess, Vec residualVector);
-	
-};
-
 
 /*
-* Global residual functions for use with implicit steppers
+* A simple test force used in several off the cell population tests
 */
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-PetscErrorCode BACKWARDEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext){
 
-    AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
-    pStepper->BACKWARDEULERComputeResidual(currentGuess, residualVector);
 
-    return 0;
+template<unsigned  ELEMENT_DIM, unsigned SPACE_DIM=ELEMENT_DIM>
+class PopulationTestingForce : public AbstractForce<ELEMENT_DIM, SPACE_DIM> {
+
+public:
+
+	PopulationTestingForce(): 
+	         AbstractForce<ELEMENT_DIM, SPACE_DIM>()
+	{
+	}
+
+	virtual void AddForceContribution(AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>& rCellPopulation){	
+
+		for (unsigned i=0; i<rCellPopulation.GetNumNodes(); i++)
+        {
+            c_vector<double, SPACE_DIM> force;
+
+            for(int j=0; j<SPACE_DIM; j++){
+            	
+            	force[j] = (j+1)*i*0.01;
+            }
+
+            rCellPopulation.GetNode(i)->ClearAppliedForce();
+            rCellPopulation.GetNode(i)->AddAppliedForceContribution(force);
+        }
+
+	};
+
+	virtual void OutputForceParameters(out_stream& rParamsFile){		
+	};
+
 };
 
-#endif /*ALTMETHODSTIMESTEPPER_HPP_*/
+#endif /*POPULATIONTESTINGFORCE_HPP_*/ 

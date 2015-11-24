@@ -176,6 +176,7 @@ public:
 
         // Test Warnings
         TS_ASSERT_EQUALS(Warnings::Instance()->GetNumWarnings(), 0u);
+        Warnings::PrintWarnings();
         Warnings::QuietDestroy();
     }
 

@@ -58,6 +58,9 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "SmartPointers.hpp"
 #include "FileComparison.hpp"
 #include "ShortAxisVertexBasedDivisionRule.hpp"
+#include "AltMethodsTimestepper.hpp"
+#include "PopulationTestingForce.hpp"
+#include "StepperChoice.hpp"
 
 // Cell writers
 #include "CellAgesWriter.hpp"
@@ -1370,25 +1373,21 @@ public:
         // Create cell population
         VertexBasedCellPopulation<2> cell_population(*p_mesh, cells);
 
-        // Make up some forces
         std::vector<c_vector<double, 2> > old_posns(cell_population.GetNumNodes());
-
-        for (unsigned i=0; i<cell_population.GetNumNodes(); i++)
-        {
-            c_vector<double, 2> force;
-            old_posns[i][0] = p_mesh->GetNode(i)->rGetLocation()[0];
-            old_posns[i][1] = p_mesh->GetNode(i)->rGetLocation()[1];
-
-            force[0] = i*0.01;
-            force[1] = 2*i*0.01;
-
-            cell_population.GetNode(i)->ClearAppliedForce();
-            cell_population.GetNode(i)->AddAppliedForceContribution(force);
+        for(int i=0; i<cell_population.GetNumNodes(); i++){
+            old_posns[i][0] = cell_population.GetNode(i)->rGetLocation()[0];
+            old_posns[i][1] = cell_population.GetNode(i)->rGetLocation()[1];
         }
 
-        double time_step = 0.01;
+        // Create a force collection and a timestepper class
+        std::vector<boost::shared_ptr<AbstractForce<2,2> > > force_collection;
+        MAKE_PTR(PopulationTestingForce<2>, p_test_force);
+        force_collection.push_back(p_test_force);
+        AltMethodsTimestepper<2,2> timestepper(cell_population, force_collection);
 
-        cell_population.UpdateNodeLocations(time_step);
+        // Call for a time step
+        double time_step = 0.01;
+        timestepper.UpdateAllNodePositions(time_step, StepperChoice::EULER);
 
         for (unsigned i=0; i<cell_population.GetNumNodes(); i++)
         {

@@ -198,11 +198,7 @@ void NodeBasedCellPopulationWithParticles<DIM>::Validate()
 template<unsigned DIM>
 void NodeBasedCellPopulationWithParticles<DIM>::UpdateNodeLocations(double dt)
 {
-    // First update particle positions
-    //UpdateParticlePositions(dt);
 
-    // Then call the base class method
-    AbstractCentreBasedCellPopulation<DIM>::UpdateNodeLocations(dt);
 }
 
 template<unsigned DIM>

@@ -56,16 +56,16 @@ bool FixedDivisionTimingsCellCycleModel::ReadyToDivide(){
 	double currentTime = SimulationTime::Instance()->GetTime();
 	double nextTime = currentTime + SimulationTime::Instance()->GetTimeStep();
 
-	int cycleNumberCurrent = (int)(currentTime/timeBetweenDivisions);
-	int cycleNumberNext = (int)(nextTime/timeBetweenDivisions);
+	int cycleNumberCurrent = (int)(currentTime / targetTimeBetweenDivisions);
+	int cycleNumberNext = (int)(nextTime / targetTimeBetweenDivisions);
 
 	if(cycleNumberNext > cycleNumberCurrent){
 		
 		// A division should occur between this time step and the next.
 		// Find out which is closer to the target time.
 
-		double remainderCurrent = currentTime - cycleNumberCurrent*timeBetweenDivisions;
-		double remainderNext = nextTime - cycleNumberNext*timeBetweenDivisions;
+		double remainderCurrent = currentTime - cycleNumberCurrent * targetTimeBetweenDivisions;
+		double remainderNext = nextTime - cycleNumberNext * targetTimeBetweenDivisions;
 
 		if(remainderCurrent <= remainderNext){
 			return true;

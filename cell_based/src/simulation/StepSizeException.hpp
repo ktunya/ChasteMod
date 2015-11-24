@@ -5,13 +5,13 @@ public:
 	double 	displacement;
 	double 	suggestedNewStep;
 	const std::string message;
-	bool endSimulation;
+	bool isTerminal;
 
-	StepSizeException(double errDisplacement, double errNewStep, const std::string errMessage, bool errEndSim):
+	StepSizeException(double errDisplacement, double errNewStep, const std::string errMessage, bool errIsTerminal):
 		displacement(errDisplacement),
 		suggestedNewStep(errNewStep),
 		message(errMessage),
-		endSimulation(errEndSim),
+		isTerminal(errIsTerminal),
 		std::exception()
 	{
 	}
