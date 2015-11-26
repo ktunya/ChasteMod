@@ -53,6 +53,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "NodeBasedCellPopulation.hpp"
 #include "GeneralisedLinearSpringForce.hpp"
 #include "StochasticDurationCellCycleModel.hpp"
+#include "FixedDivisionTimingsCellCycleModel.hpp"
 #include "SimpleCellCentrePositionTracker.hpp"
 #include "SimplePopulationExtentTracker.hpp"
 
@@ -62,7 +63,11 @@ class TestNodeBasedWithAlternativeTimesteppers : public AbstractCellBasedWithTim
 public:
     
     enum RunChoices {EULER, RK4, BACKWARDEULER, ALL};
-    static const int toRun = EULER;
+    static const int toRun = ALL;
+
+    enum CycleModel {STOCHASTIC, FIXEDTIMINGS};
+    static const int CCmodel = FIXEDTIMINGS;
+
 
     // We want to compare various timestepping methods with forward Euler here, including RK4, and implicit
     // methods, to see whether performance improves. RK4 etc are more work per step than forward Euler, so 
@@ -93,9 +98,7 @@ public:
                 mesh.ConstructNodesWithoutMesh(nodes, 3.0);
 
                 std::vector<CellPtr> cells;
-                MAKE_PTR(StemCellProliferativeType, pStemType);
-                CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
-                cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
+                GenerateStemCells(cells, mesh.GetNumNodes());
 
                 NodeBasedCellPopulation<3>* cellPopulation = new NodeBasedCellPopulation<3>(mesh, cells);
                 cellPopulation->SetAbsoluteMovementThreshold(movementThresh);
@@ -104,7 +107,7 @@ public:
                 OffLatticeSimulation<3> simulation((*cellPopulation), false, true, false, StepperChoice::EULER);
 
                 std::ostringstream outDir;
-                outDir << "NB_Euler_Thresh" << movementThresh;
+                outDir << "NB_Euler_Rep" << i;
 
                 setupSimulation(&simulation, outDir.str(), stepsPerHour);
 
@@ -128,6 +131,7 @@ public:
 
     void Test3dNodeBasedWithEulerStepperAdaptive() throw (Exception)
     {
+        /*
         if(toRun == EULER || toRun == ALL){
             setupTestParameters();
 
@@ -174,7 +178,7 @@ public:
                 delete nodes[0];
                 delete nodes[1];
             }  
-        }  
+        }  */
     }
 
     void Test3dNodeBasedWithRK4Stepper() throw (Exception)
@@ -199,9 +203,7 @@ public:
                 mesh.ConstructNodesWithoutMesh(nodes, 3.0);
 
                 std::vector<CellPtr> cells;
-                MAKE_PTR(StemCellProliferativeType, pStemType);
-                CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
-                cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
+                GenerateStemCells(cells, mesh.GetNumNodes());
 
                 NodeBasedCellPopulation<3>* cellPopulation = new NodeBasedCellPopulation<3>(mesh, cells);
                 cellPopulation->SetAbsoluteMovementThreshold(movementThresh);
@@ -209,7 +211,7 @@ public:
 
                 OffLatticeSimulation<3> simulation(*cellPopulation, false, true,  false, StepperChoice::RK4);
                 std::ostringstream outDir;
-                outDir << "NB_RK4_Thresh" << movementThresh;
+                outDir << "NB_RK4_Rep" << i;
                 setupSimulation(&simulation, outDir.str(), stepsPerHour);
 
                 // Add a cell movement tracker 
@@ -232,6 +234,7 @@ public:
 
     void Test3dNodeBasedWithRK4StepperAdaptive() throw (Exception)
     {
+        /*
         if(toRun == RK4 || toRun == ALL){
         
             setupTestParameters();
@@ -279,7 +282,7 @@ public:
                 delete nodes[0];
                 delete nodes[1];
             }
-        }  
+        }  */
     }
 
     void Test3dNodeBasedWithBackwardEulerStepper() throw (Exception)
@@ -304,9 +307,7 @@ public:
                 mesh.ConstructNodesWithoutMesh(nodes, 3.0);
 
                 std::vector<CellPtr> cells;
-                MAKE_PTR(StemCellProliferativeType, pStemType);
-                CellsGenerator<StochasticDurationCellCycleModel, 3> cellsGen;
-                cellsGen.GenerateBasicRandom(cells, mesh.GetNumNodes(), pStemType);
+                GenerateStemCells(cells, mesh.GetNumNodes());
 
                 NodeBasedCellPopulation<3>* cellPopulation = new NodeBasedCellPopulation<3>(mesh, cells);
                 cellPopulation->SetAbsoluteMovementThreshold(movementThresh);
@@ -314,7 +315,7 @@ public:
 
                 OffLatticeSimulation<3> simulation(*cellPopulation, false, true,  false, StepperChoice::BACKWARDEULER);
                 std::ostringstream outDir;
-                outDir << "NB_BackwardEuler_Thresh" << movementThresh;
+                outDir << "NB_BackwardEuler_Rep" << i;
                 setupSimulation(&simulation, outDir.str(), stepsPerHour);
 
                 // Add a cell movement tracker 
@@ -336,7 +337,7 @@ public:
 
 
     void Test3dNodeBasedWithBackwardEulerStepperAdaptive() throw (Exception)
-    {
+    {   /*
         if(toRun == BACKWARDEULER || toRun == ALL){
 
             setupTestParameters();
@@ -384,7 +385,7 @@ public:
                 delete nodes[0];
                 delete nodes[1];
             } 
-        }   
+        }*/   
     }
 
 
@@ -408,15 +409,18 @@ public:
     void setupTestParameters(){ 
         
         minStepIndex = 0;
-        maxStepIndex = 11;
+        maxStepIndex = 8;
         endTime = 100;
  
-        double threshes[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
-        movThresholds = std::vector<double>(&threshes[0], &threshes[0]+12);
-        int steps1[12] = {10000, 5000, 2500, 1800, 1300, 590,  295, 147, 100, 75,  60,  59 };
-        stepsPerHour_DoesNotExceedMovThresh = std::vector<int>(&steps1[0], &steps1[0]+12);
-        int steps2[12] = {5000,  2500, 1800, 1300, 590,  295,  147, 73,  50,  38,  30,  25 };
-        stepsPerHour_ExceedsMovThresh = std::vector<int>(&steps2[0], &steps2[0]+12);
+        double threshes[9] = {0.005, 0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.3, 0.5};
+        movThresholds = std::vector<double>(&threshes[0], &threshes[0]+9);
+
+        stepsPerHour_DoesNotExceedMovThresh = std::vector<int>();
+        stepsPerHour_ExceedsMovThresh       = std::vector<int>();
+        for(int i=14; i>5; i--){
+            stepsPerHour_DoesNotExceedMovThresh.push_back((int)pow(2,i));
+            stepsPerHour_ExceedsMovThresh.push_back( (int)pow(2,(i-1)) );
+        }  
     }
 
 
@@ -425,6 +429,7 @@ public:
         RandomNumberGenerator::Instance()->Reseed(0);
         SimulationTime::Instance()->Destroy();
         SimulationTime::Instance()->SetStartTime(0.0);
+        CellId::ResetMaxCellId();
     }
 
 
@@ -454,6 +459,35 @@ public:
         referenceData += "/PositionData.txt";
 
         FileComparison(fullDir + "PositionData.txt", referenceData).CompareFiles();
+    }
+
+
+    void GenerateStemCells(std::vector<CellPtr>& rCells, unsigned numCells)
+    {
+   
+        rCells.clear();
+        rCells.reserve(numCells);
+
+        for (unsigned i=0; i<numCells; i++)
+        {
+            AbstractCellCycleModel* p_cell_cycle_model;
+            if(CCmodel == STOCHASTIC){
+                p_cell_cycle_model = new StochasticDurationCellCycleModel();
+            }else if(CCmodel == FIXEDTIMINGS){
+                p_cell_cycle_model = new FixedDivisionTimingsCellCycleModel(15);
+            }else{
+                EXCEPTION("Choose a cell cycle model type");
+            }
+            p_cell_cycle_model->SetDimension(3);
+
+            boost::shared_ptr<AbstractCellProperty> p_state(CellPropertyRegistry::Instance()->Get<WildTypeCellMutationState>());
+            CellPtr p_cell(new Cell(p_state, p_cell_cycle_model));
+            p_cell->SetCellProliferativeType(CellPropertyRegistry::Instance()->Get<StemCellProliferativeType>());
+
+            double birth_time = -p_cell_cycle_model->GetAverageStemCellCycleTime()*RandomNumberGenerator::Instance()->ranf();
+            p_cell->SetBirthTime(birth_time);
+            rCells.push_back(p_cell);
+        }
     }
 };
 

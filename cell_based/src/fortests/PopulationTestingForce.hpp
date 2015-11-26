@@ -37,11 +37,11 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define POPULATIONTESTINGFORCE_HPP_
 
 #include "AbstractForce.hpp"
+#include "StepperChoice.hpp"
 
 /*
-* A simple test force used in several off the cell population tests
+* A simple force used to test node location updates across several of the off-lattice cell population tests
 */
-
 
 template<unsigned  ELEMENT_DIM, unsigned SPACE_DIM=ELEMENT_DIM>
 class PopulationTestingForce : public AbstractForce<ELEMENT_DIM, SPACE_DIM> {
@@ -55,20 +55,60 @@ public:
 
 	virtual void AddForceContribution(AbstractCellPopulation<ELEMENT_DIM,SPACE_DIM>& rCellPopulation){	
 
-		for (unsigned i=0; i<rCellPopulation.GetNumNodes(); i++)
-        {
-            c_vector<double, SPACE_DIM> force;
+		for (unsigned i=0; i<rCellPopulation.GetNumNodes(); i++){
+            
+      c_vector<double, SPACE_DIM> force;
 
-            for(int j=0; j<SPACE_DIM; j++){
-            	
-            	force[j] = (j+1)*i*0.01;
-            }
+      for(int j=0; j<SPACE_DIM; j++){
+      	
+      	force[j] = (j+1)*i*0.01*rCellPopulation.GetNode(i)->rGetLocation()[j];
+      }
 
-            rCellPopulation.GetNode(i)->ClearAppliedForce();
-            rCellPopulation.GetNode(i)->AddAppliedForceContribution(force);
+      rCellPopulation.GetNode(i)->ClearAppliedForce();
+      rCellPopulation.GetNode(i)->AddAppliedForceContribution(force);
+    }
+	};
+
+
+  c_vector<double, SPACE_DIM> GetExpectedOneStepLocation(c_vector<double, SPACE_DIM>& oldLocation, int nodeIndex, int method, double dt){
+
+      c_vector<double, SPACE_DIM> result;
+
+      if(method == StepperChoice::EULER){
+        
+        for(int j = 0; j < SPACE_DIM; j++){
+          result[j] = oldLocation[j] + dt * (j+1)*0.01*nodeIndex * oldLocation[j];
         }
 
-	};
+      }else if(method == StepperChoice::RK4){
+
+        for(int j = 0; j < SPACE_DIM; j++){
+          double k1 = (j+1)*0.01*nodeIndex *  oldLocation[j];
+          double k2 = (j+1)*0.01*nodeIndex * (oldLocation[j] + (dt/2.0)*k1);
+          double k3 = (j+1)*0.01*nodeIndex * (oldLocation[j] + (dt/2.0)*k2);
+          double k4 = (j+1)*0.01*nodeIndex * (oldLocation[j] + dt*k3);
+          result[j] = oldLocation[j] + (1.0/6.0)*dt*(k1 + 2*k2 + 2*k3 + k4);
+        }
+
+      }else if(method == StepperChoice::BACKWARDEULER){ 
+
+        for(int j = 0; j < SPACE_DIM; j++){
+          result[j] = oldLocation[j] / (1-dt*0.01*(j+1)*nodeIndex);
+        }
+
+      }else if(method == StepperChoice::ADAMSMOULTON){
+  
+        for(int j = 0; j < SPACE_DIM; j++){        
+          result[j] = oldLocation[j] * (1 + 0.5*dt*0.01*(j+1)*nodeIndex) / (1 - 0.5*dt*0.01*(j+1)*nodeIndex);
+        }
+
+      }else{
+
+      }
+
+      return result;
+  };
+
 
 	virtual void OutputForceParameters(out_stream& rParamsFile){		
 	};

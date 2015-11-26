@@ -160,19 +160,18 @@ void MeshBasedCellPopulationWithGhostNodes<DIM>::ApplyGhostForces()
 
         c_vector<double, DIM> force = CalculateForceBetweenGhostNodes(nodeA_global_index, nodeB_global_index);
 
-        double damping_constant = this->GetDampingConstantNormal();
 
         if (!this->mIsGhostNode[nodeA_global_index])
         {
-            drdt[nodeB_global_index] -= force / damping_constant;
+            drdt[nodeB_global_index] -= force;
         }
         else
         {
-            drdt[nodeA_global_index] += force / damping_constant;
+            drdt[nodeA_global_index] += force;
 
             if (this->mIsGhostNode[nodeB_global_index])
             {
-                drdt[nodeB_global_index] -= force / damping_constant;
+                drdt[nodeB_global_index] -= force;
             }
         }
     }

@@ -73,6 +73,7 @@ rForceCollection( inputForceCollection )
     }
 
 	pNonlinearSolver = new SimplePetscNonlinearSolver();
+    pNonlinearSolver->SetTolerance(1e-7);
 	implicitStepSize = 0;
 };
 
@@ -117,7 +118,8 @@ std::vector<c_vector<double, SPACE_DIM> > AltMethodsTimestepper<ELEMENT_DIM,SPAC
     for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
          node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter)
     {
-        forcesAsVector.push_back(node_iter->rGetAppliedForce()); 
+        double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
+        forcesAsVector.push_back(node_iter->rGetAppliedForce()/damping); 
     }
 
     return forcesAsVector;
@@ -159,10 +161,8 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
     	     		 node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
-    	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-                    
                     c_vector<double, SPACE_DIM> oldLocation = node_iter->rGetLocation();
-                    c_vector<double, SPACE_DIM> displacement = dt * F[index]/damping;
+                    c_vector<double, SPACE_DIM> displacement = dt * F[index];
 
                     HandleStepSizeExceptions(&displacement, dt, node_iter->GetIndex());
 
@@ -183,8 +183,7 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     			for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
     	     		 node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
-    	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * K1[index]/(damping*2.0);
+    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * K1[index]/2.0;
                     ChastePoint<SPACE_DIM> new_point(newLocation);
                     rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
     	        }
@@ -195,8 +194,7 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
     	     		 node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
-    	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * (K2[index] - K1[index])/(damping*2.0); //revert, then update
+    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * (K2[index] - K1[index])/2.0; //revert, then update
     	            ChastePoint<SPACE_DIM> new_point(newLocation);
                     rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
                 }
@@ -208,7 +206,7 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	     		 node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
     	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * (K3[index] - K2[index]/2.0) /damping; //revert, then update
+    	        	c_vector<double, SPACE_DIM> newLocation = node_iter->rGetLocation() + dt * (K3[index] - K2[index]/2.0); //revert, then update
                     ChastePoint<SPACE_DIM> new_point(newLocation);
                     rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
                 }
@@ -219,11 +217,10 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
     	     		 node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
-    	        	double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
     	        	c_vector<double, SPACE_DIM> effectiveForce = (K1[index] + 2*K2[index] + 2*K3[index] + K4[index] )/6.0;
 
-                    c_vector<double, SPACE_DIM> oldLocation = node_iter->rGetLocation() - dt * K3[index]/damping;
-                    c_vector<double, SPACE_DIM> displacement =  dt * (effectiveForce/damping);
+                    c_vector<double, SPACE_DIM> oldLocation = node_iter->rGetLocation() - dt * K3[index];
+                    c_vector<double, SPACE_DIM> displacement =  dt * effectiveForce;
 
                     HandleStepSizeExceptions(&displacement, dt, node_iter->GetIndex());
     	        	c_vector<double, SPACE_DIM> newLocation = oldLocation + displacement; 
@@ -232,8 +229,10 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
                     rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
 
                     //Ensure the nodes hold accurate forces, incase they're accessed by some other class
+                    double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
     	        	node_iter->ClearAppliedForce();
-    	        	node_iter->AddAppliedForceContribution(effectiveForce);
+                    c_vector<double, SPACE_DIM> force = effectiveForce*damping;
+    	        	node_iter->AddAppliedForceContribution(force);
     	        }
     	 	}
     		break;
@@ -246,15 +245,14 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        unsigned systemSize = rCellPopulation.GetNumNodes() * SPACE_DIM;
 
     	        // Setup an initial condition consisting of the current node locations + one forward Euler step
-    	        this->UpdateAllNodePositions(0.005, StepperChoice::EULER);
+    	        
+                //this->UpdateAllNodePositions(0.005, StepperChoice::EULER);
     	        Vec initialCondition = PetscTools::CreateAndSetVec(systemSize, 0.0);
 
     	        int index = 0;
     	        for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
     	             node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
-    	        {
-    	            double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-    	            
+    	        {   
     	            c_vector<double, SPACE_DIM> location = node_iter->rGetLocation();
     	            for(int i=0; i<SPACE_DIM; i++){
     	                PetscVecTools::SetElement(initialCondition, SPACE_DIM*index + i, location[i]);
@@ -274,8 +272,6 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
     	            node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
     	        {
-    	            double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
-
     	            c_vector<double, SPACE_DIM> oldLocation = initialLocations[index];
     	            c_vector<double, SPACE_DIM> newLocation;      
     	            for(int i=0; i<SPACE_DIM; i++){
@@ -289,6 +285,7 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
                     rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
     	            
                     node_iter->ClearAppliedForce();
+                    double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
     	            c_vector<double, SPACE_DIM> effectiveForce = (damping/dt)*displacement;
     	            node_iter->AddAppliedForceContribution(effectiveForce);
     	        }
@@ -296,6 +293,65 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNodePositions(double
     	        PetscTools::Destroy(initialCondition);
     		}
     		break;
+
+
+            case StepperChoice::ADAMSMOULTON :
+            {
+                std::vector< c_vector<double,SPACE_DIM> > initialLocations = SaveCurrentLocations();
+                
+                implicitStepSize = dt;
+                unsigned systemSize = rCellPopulation.GetNumNodes() * SPACE_DIM;
+
+                // Setup an initial condition consisting of the current node locations + one forward Euler step
+                //this->UpdateAllNodePositions(0.005, StepperChoice::EULER);
+                
+                Vec initialCondition = PetscTools::CreateAndSetVec(systemSize, 0.0);
+
+                int index = 0;
+                for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
+                     node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
+                {   
+                    c_vector<double, SPACE_DIM> location = node_iter->rGetLocation();
+                    for(int i=0; i<SPACE_DIM; i++){
+                        PetscVecTools::SetElement(initialCondition, SPACE_DIM*index + i, location[i]);
+                    }         
+                }
+
+                // Call nonlinear solver
+                Vec solnNextTimestep = pNonlinearSolver->Solve( &ADAMSMOULTON_ComputeResidual<ELEMENT_DIM, SPACE_DIM>,  
+                                                                 SNESComputeJacobianDefault,  
+                                                                 initialCondition,   
+                                                                 UINT_MAX,          
+                                                                 this);              
+                // Unpack solution. 
+                ReplicatableVector solnNextTimestepRepl(solnNextTimestep);
+
+                index = 0;
+                for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
+                    node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
+                {
+
+                    c_vector<double, SPACE_DIM> oldLocation = initialLocations[index];
+                    c_vector<double, SPACE_DIM> newLocation;      
+                    for(int i=0; i<SPACE_DIM; i++){
+                        newLocation[i] = solnNextTimestepRepl[SPACE_DIM * index + i];
+                    }
+                    
+                    c_vector<double, SPACE_DIM> displacement = rCellPopulation.rGetMesh().GetVectorFromAtoB(oldLocation, newLocation);
+                    HandleStepSizeExceptions(&displacement, dt, node_iter->GetIndex());
+
+                    ChastePoint<SPACE_DIM> new_point(newLocation);
+                    rCellPopulation.SetNode(node_iter->GetIndex(), new_point);
+                    
+                    node_iter->ClearAppliedForce();
+                    double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
+                    c_vector<double, SPACE_DIM> effectiveForce = (damping/dt)*displacement;
+                    node_iter->AddAppliedForceContribution(effectiveForce);
+                }
+
+                PetscTools::Destroy(initialCondition);
+            }
+            break;
 		}
 
 	}else{
@@ -352,9 +408,46 @@ void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::BACKWARDEULERComputeResidual(
 
         for(int i=0; i<SPACE_DIM; i++){
 
-            double damping = rCellPopulation.GetDampingConstant(node_iter->GetIndex());
+            double residual_ith_cpt = guessPositions[SPACE_DIM * index + i] - currentLocations[index][i] - implicitStepSize * Fguess[index][i];
 
-            double residual_ith_cpt = guessPositions[SPACE_DIM * index + i] - currentLocations[index][i] - implicitStepSize * Fguess[index][i]/damping;
+            PetscVecTools::SetElement(residualVector, SPACE_DIM * index + i, residual_ith_cpt);
+        }
+    } 
+};
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void AltMethodsTimestepper<ELEMENT_DIM,SPACE_DIM>::ADAMSMOULTONComputeResidual(const Vec currentGuess, Vec residualVector){
+
+    std::vector< c_vector<double, SPACE_DIM> > currentLocations = SaveCurrentLocations();
+    std::vector< c_vector<double, SPACE_DIM> > Fcurrent = ComputeAndSaveForces();
+
+    ReplicatableVector guessPositions(currentGuess);
+
+    int index = 0;
+    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
+        node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
+    {  
+        c_vector<double, SPACE_DIM> guessLocation; 
+        for(int i=0; i<SPACE_DIM; i++){
+            guessLocation[i] = guessPositions[SPACE_DIM * index + i];
+        }
+        node_iter->rGetModifiableLocation() = guessLocation;
+    }
+
+    // Get force at the guess locations
+    std::vector< c_vector<double, SPACE_DIM> > Fguess = ComputeAndSaveForces();
+    
+    index = 0;
+    for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = rCellPopulation.rGetMesh().GetNodeIteratorBegin();
+         node_iter != rCellPopulation.rGetMesh().GetNodeIteratorEnd(); ++node_iter, ++index)
+    {     
+        node_iter->rGetModifiableLocation() = currentLocations[index];
+
+        for(int i=0; i<SPACE_DIM; i++){
+
+            double residual_ith_cpt = guessPositions[SPACE_DIM * index + i] - currentLocations[index][i] 
+                                      - (implicitStepSize/2.0) * ( Fguess[index][i] + Fcurrent[index][i] );
 
             PetscVecTools::SetElement(residualVector, SPACE_DIM * index + i, residual_ith_cpt);
         }

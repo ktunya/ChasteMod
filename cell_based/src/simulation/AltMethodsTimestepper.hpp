@@ -71,7 +71,8 @@ public:
 	void UpdateAllNodePositions(double dt, int stepper);
 
 	void BACKWARDEULERComputeResidual(const Vec currentGuess, Vec residualVector);
-	
+
+	void ADAMSMOULTONComputeResidual(const Vec currentGuess, Vec residualVector);
 };
 
 
@@ -83,6 +84,14 @@ PetscErrorCode BACKWARDEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec re
 
     AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
     pStepper->BACKWARDEULERComputeResidual(currentGuess, residualVector);
+
+    return 0;
+};
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+PetscErrorCode ADAMSMOULTON_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext){
+
+    AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
+    pStepper->ADAMSMOULTONComputeResidual(currentGuess, residualVector);
 
     return 0;
 };

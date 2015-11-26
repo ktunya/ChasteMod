@@ -55,6 +55,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "MeshBasedCellPopulationWithGhostNodes.hpp"
 #include "GeneralisedLinearSpringForce.hpp"
 #include "StochasticDurationCellCycleModel.hpp"
+#include "FixedDivisionTimingsCellCycleModel.hpp"
 #include "SimpleCellCentrePositionTracker.hpp"
 #include "SimplePopulationExtentTracker.hpp"
 #include "StemCellProliferativeType.hpp"
@@ -65,7 +66,10 @@ class TestMeshBasedWithAlternativeTimesteppers : public AbstractCellBasedWithTim
 public:
 
     enum RunChoices {EULER, RK4, BACKWARDEULER, ALL};
-    static const int toRun = EULER;
+    static const int toRun = RK4;
+
+    enum CycleModel {STOCHASTIC, FIXEDTIMINGS};
+    static const int CCmodel = FIXEDTIMINGS;
 
 
     void TestMeshBasedWithEulerStepper() throw (Exception)
@@ -87,9 +91,7 @@ public:
         		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
 
         		std::vector<CellPtr> cells;
-        		MAKE_PTR(StemCellProliferativeType, p_stem_type);
-        		CellsGenerator<StochasticDurationCellCycleModel, 2> cells_generator;
-        		cells_generator.GenerateBasic(cells, location_indices.size(), location_indices, p_stem_type);
+        		GenerateStemCells(cells, location_indices.size(), location_indices);
 		
         		MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
         		cellPopulation.CreateVoronoiTessellation();
@@ -185,9 +187,7 @@ public:
         		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
 
         		std::vector<CellPtr> cells;
-        		MAKE_PTR(StemCellProliferativeType, p_stem_type);
-        		CellsGenerator<StochasticDurationCellCycleModel, 2> cells_generator;
-        		cells_generator.GenerateBasic(cells, location_indices.size(), location_indices, p_stem_type);
+        		GenerateStemCells(cells, location_indices.size(), location_indices);
 		
         		MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
         		cellPopulation.CreateVoronoiTessellation();
@@ -217,7 +217,7 @@ public:
 
     void TestMeshBasedWithRK4StepperAdaptive() throw (Exception)
     {
-    	if(toRun == RK4 || toRun == ALL){
+    	/*if(toRun == RK4 || toRun == ALL){
 
             setupTestParameters();
 
@@ -260,7 +260,7 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
             }
-        }
+        }*/
     }
 
 
@@ -283,9 +283,7 @@ public:
         		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
 
         		std::vector<CellPtr> cells;
-        		MAKE_PTR(StemCellProliferativeType, p_stem_type);
-        		CellsGenerator<StochasticDurationCellCycleModel, 2> cells_generator;
-        		cells_generator.GenerateBasic(cells, location_indices.size(), location_indices, p_stem_type);
+        		GenerateStemCells(cells, location_indices.size(), location_indices);
 		
         		MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
         		cellPopulation.CreateVoronoiTessellation();
@@ -315,7 +313,7 @@ public:
 
     void TestMeshBasedWithBackwardEulerStepperAdaptive() throw (Exception)
     {
-    	if(toRun == BACKWARDEULER || toRun == ALL){
+    	/*if(toRun == BACKWARDEULER || toRun == ALL){
 
             setupTestParameters();
 
@@ -358,7 +356,7 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
             }
-        }
+        }*/
     }
 
 
@@ -374,7 +372,7 @@ public:
     int maxStepIndex;
     int meshSide;
     double endTime;
- 
+    
     std::vector<double> movThresholds;                   
     std::vector<int> stepsPerHour_DoesNotExceedMovThresh;
     std::vector<int> stepsPerHour_ExceedsMovThresh;   
@@ -382,16 +380,16 @@ public:
 
     void setupTestParameters(){ 
         
-        minStepIndex = 0;
+        minStepIndex = 5;
         maxStepIndex = 11;
         meshSide = 3;
         endTime = 100;
  
-        double threshes[12] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
+        double threshes[12] = {0.005, 0.01,  0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
         movThresholds = std::vector<double>(&threshes[0], &threshes[0]+12);
-        int steps1[12] = {10000, 5000, 2500, 1800, 1300, 590,  295, 147, 100, 75,  60,  59 };
+        int steps1[12] =      {6000,  3000,  1500, 900,  800,  600,  300, 200, 150,  100,  80,  60 };
         stepsPerHour_DoesNotExceedMovThresh = std::vector<int>(&steps1[0], &steps1[0]+12);
-        int steps2[12] = {5000,  2500, 1800, 1300, 590,  295,  147, 73,  50,  38,  30,  25 };
+        int steps2[12] =      {3000,  1500,  750,  450,  400,  300,  150, 100,  75,  50,  40,  30 };
         stepsPerHour_ExceedsMovThresh = std::vector<int>(&steps2[0], &steps2[0]+12);
     }
 
@@ -401,6 +399,7 @@ public:
         RandomNumberGenerator::Instance()->Reseed(0);
         SimulationTime::Instance()->Destroy();
         SimulationTime::Instance()->SetStartTime(0.0);
+        CellId::ResetMaxCellId();
     }
 
 
@@ -419,6 +418,41 @@ public:
 
         MAKE_PTR_ARGS(SimplePopulationExtentTracker<2>, pExtentTracker, (stepsPerHour));
         sim->AddSimulationModifier(pExtentTracker);
+    }
+
+
+    void GenerateStemCells(std::vector<CellPtr>& rCells, unsigned numCells, const std::vector<unsigned> locationIndices)
+    {
+   
+        rCells.clear();
+        // If location indices is given, then it needs to match the number of output cells
+        if (numCells != locationIndices.size())
+        {
+            EXCEPTION("The size of the locationIndices vector must match the required number of output cells");
+        }
+        rCells.reserve(numCells);
+
+        // Create cells
+        for (unsigned i=0; i<numCells; i++)
+        {   
+            AbstractCellCycleModel* p_cell_cycle_model;
+            if(CCmodel == STOCHASTIC){
+                p_cell_cycle_model = new StochasticDurationCellCycleModel();
+            }else if(CCmodel == FIXEDTIMINGS){
+                p_cell_cycle_model = new FixedDivisionTimingsCellCycleModel(15);
+            }else{
+                EXCEPTION("Choose a cell cycle model type");
+            }
+            p_cell_cycle_model->SetDimension(2);
+
+            boost::shared_ptr<AbstractCellProperty> p_state(CellPropertyRegistry::Instance()->Get<WildTypeCellMutationState>());
+            CellPtr p_cell(new Cell(p_state, p_cell_cycle_model));
+            p_cell->SetCellProliferativeType(CellPropertyRegistry::Instance()->Get<StemCellProliferativeType>());
+
+            double birth_time = 0.0 - locationIndices[i];
+            p_cell->SetBirthTime(birth_time);
+            rCells.push_back(p_cell);
+        }
     }
 
 };

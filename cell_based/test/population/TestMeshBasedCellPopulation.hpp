@@ -650,41 +650,54 @@ public:
 
     void TestUpdateNodeLocations()
     {
-        // Test MeshBasedCellPopulation::UpdateNodeLocations()
 
-        // Create a simple mesh
-        TrianglesMeshReader<2,2> mesh_reader("mesh/test/data/square_4_elements");
-        MutableMesh<2,2> mesh;
-        mesh.ConstructFromMeshReader(mesh_reader);
-
-        std::vector<CellPtr> cells;
-        CellsGenerator<FixedDurationGenerationBasedCellCycleModel, 2> cells_generator;
-        cells_generator.GenerateBasic(cells, mesh.GetNumNodes());
-
-        // Create a cell population, with no ghost nodes at the moment
-        MeshBasedCellPopulation<2> cell_population(mesh, cells);
+        // Common setup
+        RandomNumberGenerator* p_random_num_gen = RandomNumberGenerator::Instance();
         
-        std::vector<c_vector<double, 2> > old_posns(cell_population.GetNumNodes());
-        for(int i=0; i<cell_population.GetNumNodes(); i++){
-            old_posns[i][0] = cell_population.GetNode(i)->rGetLocation()[0];
-            old_posns[i][1] = cell_population.GetNode(i)->rGetLocation()[1];
-        }
+        // Repeat the update test for each numerical method:
+        for(int method = StepperChoice::EULER; method != StepperChoice::LAST; method++){
 
-        // Create a force collection and a timestepper class
-        std::vector<boost::shared_ptr<AbstractForce<2,2> > > force_collection;
-        MAKE_PTR(PopulationTestingForce<2>, p_test_force);
-        force_collection.push_back(p_test_force);
-        AltMethodsTimestepper<2,2> timestepper(cell_population, force_collection);
+            // Prepare for new run
+            RandomNumberGenerator::Instance()->Reseed(0);
+            SimulationTime::Instance()->Destroy();
+            SimulationTime::Instance()->SetStartTime(0.0);
+            CellId::ResetMaxCellId();
 
-        // Call for a time step
-        double time_step = 0.01;
-        timestepper.UpdateAllNodePositions(time_step, StepperChoice::EULER);
+            // Create a simple mesh
+            TrianglesMeshReader<2,2> mesh_reader("mesh/test/data/square_4_elements");
+            MutableMesh<2,2> mesh;
+            mesh.ConstructFromMeshReader(mesh_reader);
 
-        // Check that node locations were correctly updated
-        for (unsigned i=0; i<cell_population.GetNumNodes(); i++)
-        {
-            TS_ASSERT_DELTA(cell_population.GetNode(i)->rGetLocation()[0], old_posns[i][0] +   i*0.01*0.01, 1e-9);
-            TS_ASSERT_DELTA(cell_population.GetNode(i)->rGetLocation()[1], old_posns[i][1] + 2*i*0.01*0.01, 1e-9);
+            std::vector<CellPtr> cells;
+            CellsGenerator<FixedDurationGenerationBasedCellCycleModel, 2> cells_generator;
+            cells_generator.GenerateBasic(cells, mesh.GetNumNodes());
+
+            // Create a cell population, with no ghost nodes at the moment
+            MeshBasedCellPopulation<2> cell_population(mesh, cells);
+            
+            std::vector<c_vector<double, 2> > old_posns(cell_population.GetNumNodes());
+            for(int i=0; i<cell_population.GetNumNodes(); i++){
+                old_posns[i][0] = cell_population.GetNode(i)->rGetLocation()[0];
+                old_posns[i][1] = cell_population.GetNode(i)->rGetLocation()[1];
+            }
+
+            // Create a force collection and a timestepper class
+            std::vector<boost::shared_ptr<AbstractForce<2,2> > > force_collection;
+            MAKE_PTR(PopulationTestingForce<2>, p_test_force);
+            force_collection.push_back(p_test_force);
+            AltMethodsTimestepper<2,2> timestepper(cell_population, force_collection);
+
+            // Call for a time step
+            double time_step = 0.01;
+            timestepper.UpdateAllNodePositions(time_step, method);
+
+            // Check that node locations were correctly updated
+            for (unsigned i=0; i<cell_population.GetNumNodes(); i++)
+            {
+                c_vector<double, 2> actualLocation   = cell_population.GetNode(i)->rGetLocation();
+                c_vector<double, 2> expectedLocation = p_test_force->GetExpectedOneStepLocation(old_posns[i], i, method, time_step);
+                TS_ASSERT_DELTA(norm_2(actualLocation-expectedLocation), 0, 1e-9);
+            }
         }
     }
 

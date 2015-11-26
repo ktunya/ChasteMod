@@ -1358,41 +1358,56 @@ public:
 
     void TestUpdateNodeLocations() throw (Exception)
     {
-        // Create a simple 2D VertexMesh
-        HoneycombVertexMeshGenerator generator(5, 3);
-        MutableVertexMesh<2,2>* p_mesh = generator.GetMesh();
 
-        // Impose a larger cell rearrangement threshold so that motion is uninhibited (see #1376)
-        p_mesh->SetCellRearrangementThreshold(0.1);
+        // Common setup
+        RandomNumberGenerator* p_random_num_gen = RandomNumberGenerator::Instance();
+        
+        // Repeat the update test for each numerical method:
+        for(int method = StepperChoice::EULER; method != StepperChoice::LAST; method++){
 
-        // Create cells
-        std::vector<CellPtr> cells;
-        CellsGenerator<FixedDurationGenerationBasedCellCycleModel, 2> cells_generator;
-        cells_generator.GenerateBasic(cells, p_mesh->GetNumElements());
+            // Prepare for new run
+            RandomNumberGenerator::Instance()->Reseed(0);
+            SimulationTime::Instance()->Destroy();
+            SimulationTime::Instance()->SetStartTime(0.0);
+            CellId::ResetMaxCellId();
 
-        // Create cell population
-        VertexBasedCellPopulation<2> cell_population(*p_mesh, cells);
+            // Create a simple 2D VertexMesh
+            HoneycombVertexMeshGenerator generator(5, 3);
+            MutableVertexMesh<2,2>* p_mesh = generator.GetMesh();
 
-        std::vector<c_vector<double, 2> > old_posns(cell_population.GetNumNodes());
-        for(int i=0; i<cell_population.GetNumNodes(); i++){
-            old_posns[i][0] = cell_population.GetNode(i)->rGetLocation()[0];
-            old_posns[i][1] = cell_population.GetNode(i)->rGetLocation()[1];
-        }
+            // Impose a larger cell rearrangement threshold so that motion is uninhibited (see #1376)
+            p_mesh->SetCellRearrangementThreshold(0.1);
 
-        // Create a force collection and a timestepper class
-        std::vector<boost::shared_ptr<AbstractForce<2,2> > > force_collection;
-        MAKE_PTR(PopulationTestingForce<2>, p_test_force);
-        force_collection.push_back(p_test_force);
-        AltMethodsTimestepper<2,2> timestepper(cell_population, force_collection);
+            // Create cells
+            std::vector<CellPtr> cells;
+            CellsGenerator<FixedDurationGenerationBasedCellCycleModel, 2> cells_generator;
+            cells_generator.GenerateBasic(cells, p_mesh->GetNumElements());
 
-        // Call for a time step
-        double time_step = 0.01;
-        timestepper.UpdateAllNodePositions(time_step, StepperChoice::EULER);
+            // Create cell population
+            VertexBasedCellPopulation<2> cell_population(*p_mesh, cells);
 
-        for (unsigned i=0; i<cell_population.GetNumNodes(); i++)
-        {
-            TS_ASSERT_DELTA(cell_population.GetNode(i)->rGetLocation()[0], old_posns[i][0] +   i*0.01*0.01, 1e-9);
-            TS_ASSERT_DELTA(cell_population.GetNode(i)->rGetLocation()[1], old_posns[i][1] + 2*i*0.01*0.01, 1e-9);
+            std::vector<c_vector<double, 2> > old_posns(cell_population.GetNumNodes());
+            for(int i=0; i<cell_population.GetNumNodes(); i++){
+                old_posns[i][0] = cell_population.GetNode(i)->rGetLocation()[0];
+                old_posns[i][1] = cell_population.GetNode(i)->rGetLocation()[1];
+            }
+
+            // Create a force collection and a timestepper class
+            std::vector<boost::shared_ptr<AbstractForce<2,2> > > force_collection;
+            MAKE_PTR(PopulationTestingForce<2>, p_test_force);
+            force_collection.push_back(p_test_force);
+            AltMethodsTimestepper<2,2> timestepper(cell_population, force_collection);
+
+            // Call for a time step
+            double time_step = 0.01;
+            timestepper.UpdateAllNodePositions(time_step, method);
+
+            for (unsigned i=0; i<cell_population.GetNumNodes(); i++)
+            {
+                c_vector<double, 2> actualLocation   = cell_population.GetNode(i)->rGetLocation();
+                c_vector<double, 2> expectedLocation = p_test_force->GetExpectedOneStepLocation(old_posns[i], i, method, time_step);
+                TS_ASSERT_DELTA(norm_2(actualLocation-expectedLocation), 0, 1e-9);
+            }
         }
     }
 
