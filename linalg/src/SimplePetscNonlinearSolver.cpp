@@ -37,11 +37,24 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Concrete Simple Nonlinear PDE system solver.
  */
 
+#include <iostream>
 #include <sstream>
 #include "petscsnes.h"
 #include "SimplePetscNonlinearSolver.hpp"
 #include "Exception.hpp"
 #include "PetscTools.hpp"
+
+
+SimplePetscNonlinearSolver::SimplePetscNonlinearSolver(){
+    // Default tolerance
+    tolerance = 1e-5;
+}
+
+
+void SimplePetscNonlinearSolver::SetTolerance(double inputTol){
+    tolerance = inputTol;
+};
+
 
 Vec SimplePetscNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,Vec,Vec,void*),
 #if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
@@ -79,7 +92,7 @@ Vec SimplePetscNonlinearSolver::Solve(PetscErrorCode (*pComputeResidual)(SNES,Ve
     SNESSetType(snes, SNESLS);
 #endif
 
-    SNESSetTolerances(snes,1.0e-5,1.0e-5,1.0e-5,PETSC_DEFAULT,PETSC_DEFAULT);
+    SNESSetTolerances(snes, tolerance, tolerance, tolerance, PETSC_DEFAULT,PETSC_DEFAULT);
     SNESLineSearch linesearch;
 #if (PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR == 3) //PETSc 3.3
     SNESGetSNESLineSearch(snes, &linesearch);

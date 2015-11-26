@@ -47,6 +47,12 @@ class SimplePetscNonlinearSolver : public AbstractNonlinearSolver
 {
 public:
 
+  SimplePetscNonlinearSolver();
+
+  double tolerance;
+
+  void SetTolerance(double inputTol);
+
 /**
  * Simple Nonlinear PDE system solver, uses the PETSc SNES Solver, which uses Newton's method.
  *
