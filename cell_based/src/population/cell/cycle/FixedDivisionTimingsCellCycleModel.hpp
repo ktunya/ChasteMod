@@ -67,10 +67,9 @@ private:
         archive & boost::serialization::base_object<AbstractCellCycleModel>(*this);
     }
 
-    double targetTimeBetweenDivisions; 
-    bool divideNextStep;
-
 public:
+
+    double targetTimeBetweenDivisions; 
 
     FixedDivisionTimingsCellCycleModel(double timeBetweenDivisions);
 
@@ -78,15 +77,51 @@ public:
     virtual ~FixedDivisionTimingsCellCycleModel();
 
 
-    virtual bool ReadyToDivide();
+    virtual void UpdateCellCyclePhase();
 
 
-    virtual void UpdateCellCyclePhase()=0;
+    virtual AbstractCellCycleModel* CreateCellCycleModel();
 
 
-    virtual AbstractCellCycleModel* CreateCellCycleModel()=0;
-
+    virtual void OutputCellCycleModelParameters(out_stream& rParamsFile);
 
 };
+
+#include "SerializationExportWrapper.hpp"
+// Declare identifier for the serializer
+CHASTE_CLASS_EXPORT(FixedDivisionTimingsCellCycleModel)
+
+
+namespace boost
+{
+namespace serialization
+{
+/**
+ * Serialize information required to construct a FixedDivisionTimingsCellCycleModel.
+ */
+template<class Archive>
+inline void save_construct_data(
+    Archive & ar, const FixedDivisionTimingsCellCycleModel* t, const unsigned int file_version)
+{
+  ar << t->targetTimeBetweenDivisions;
+}
+
+/**
+ * De-serialize constructor parameters and initialize a FixedDivisionTimingsCellCycleModel.
+ */
+template<class Archive>
+inline void load_construct_data(
+    Archive & ar, FixedDivisionTimingsCellCycleModel* t, const unsigned int file_version)
+{
+    // Retrieve other member variables
+    double targetDivisionInterval;
+    ar >> targetDivisionInterval;
+
+    // Invoke inplace constructor to initialise instance
+    ::new(t)FixedDivisionTimingsCellCycleModel(targetDivisionInterval);
+}
+}
+} // namespace ...
+
 
 #endif /*FIXEDDIVISIONTIMINGSCELLCYCLEMODEL_HPP_*/

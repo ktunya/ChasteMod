@@ -34,16 +34,16 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "FixedDivisionTimingsCellCycleModel.hpp"
+#include "Warnings.hpp"
 
 
 FixedDivisionTimingsCellCycleModel::FixedDivisionTimingsCellCycleModel(double timeBetweenDivisions):
-targetTimeBetweenDivisions(timeBetweenDivisions),
-divideNextStep(false)
+targetTimeBetweenDivisions(timeBetweenDivisions)
 {
-	std::cout << "WARNING: A FixedDivisionTimingsCellCycleModel manually divides cells every T hours, ";
-	std::cout << "allowing variability in division timings to be controlled when comparing simulations. ";
-	std::cout << "It does not update or use cell cycle phases, and cell cycle phase getters and setters will ";
-	std::cout << "return irrelevant or unset values." << std::cout;
+	WARN_ONCE_ONLY("WARNING: A FixedDivisionTimingsCellCycleModel manually divides cells every T hours,\
+	allowing variability in division timings to be controlled when comparing different simulations.\
+	It does not update or use cell cycle phases, and cell cycle phase getters and setters will\
+	return irrelevant or unset values.");
 }	
 
 FixedDivisionTimingsCellCycleModel::~FixedDivisionTimingsCellCycleModel()
@@ -51,42 +51,41 @@ FixedDivisionTimingsCellCycleModel::~FixedDivisionTimingsCellCycleModel()
 }
 
 
-bool FixedDivisionTimingsCellCycleModel::ReadyToDivide(){
-
-	double currentTime = SimulationTime::Instance()->GetTime();
-	double nextTime = currentTime + SimulationTime::Instance()->GetTimeStep();
-
-	int cycleNumberCurrent = (int)(currentTime / targetTimeBetweenDivisions);
-	int cycleNumberNext = (int)(nextTime / targetTimeBetweenDivisions);
-
-	if(cycleNumberNext > cycleNumberCurrent){
-		
-		// A division should occur between this time step and the next.
-		// Find out which is closer to the target time.
-
-		double remainderCurrent = currentTime - cycleNumberCurrent * targetTimeBetweenDivisions;
-		double remainderNext = nextTime - cycleNumberNext * targetTimeBetweenDivisions;
-
-		if(remainderCurrent <= remainderNext){
-			return true;
-		}else{
-			divideNextStep = true;
-			return false;
-		}
-	}
-
-	if(divideNextStep == true){
-		return true;
-	}
-
-	return false;
-};
-
-
 void FixedDivisionTimingsCellCycleModel::UpdateCellCyclePhase(){
+
+	this->mReadyToDivide = false;
+	double currentTime = SimulationTime::Instance()->GetTime();	
+
+	if(currentTime != 0){
+	
+		int cycleNumber = (int)(currentTime / targetTimeBetweenDivisions);
+		double currentRemainder = fmin( fabs(currentTime - (cycleNumber*targetTimeBetweenDivisions)),  
+			                            fabs(((cycleNumber+1)*targetTimeBetweenDivisions) - currentTime) );
+	
+		double threshold = SimulationTime::Instance()->GetTimeStep()/2.0;
+	
+		if(currentRemainder == threshold && (currentTime - (cycleNumber*targetTimeBetweenDivisions)) < 0 ){
+			this->mReadyToDivide = true;
+		}
+	
+		if(currentRemainder < threshold){
+			this->mReadyToDivide = true;
+		}
+
+	}
 };
 
 
 AbstractCellCycleModel* FixedDivisionTimingsCellCycleModel::CreateCellCycleModel(){
-	return new FixedDivisionTimingsCellCycleModel();
+	return new FixedDivisionTimingsCellCycleModel(targetTimeBetweenDivisions);
 };
+
+
+void FixedDivisionTimingsCellCycleModel::OutputCellCycleModelParameters(out_stream& rParamsFile){
+	*rParamsFile << "\t\t\t<IntervalBetweenDivisions>" << targetTimeBetweenDivisions << "</IntervalBetweenDivisions>\n";
+};
+
+
+// Serialization for Boost >= 1.36
+#include "SerializationExportWrapperForCpp.hpp"
+CHASTE_CLASS_EXPORT(FixedDivisionTimingsCellCycleModel)
