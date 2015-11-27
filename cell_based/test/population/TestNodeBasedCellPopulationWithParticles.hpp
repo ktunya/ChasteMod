@@ -55,7 +55,11 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CellPropertyRegistry.hpp"
 #include "SmartPointers.hpp"
 #include "FileComparison.hpp"
-#include "AltMethodsTimestepper.hpp"
+#include "AbstractNumericalMethodTimestepper.hpp"
+#include "AdamsMoultonNumericalMethodTimestepper.hpp"
+#include "ForwardEulerNumericalMethodTimestepper.hpp"
+#include "BackwardEulerNumericalMethodTimestepper.hpp"
+#include "RK4NumericalMethodTimestepper.hpp"
 #include "PopulationTestingForce.hpp"
 #include "StepperChoice.hpp"
 
@@ -561,9 +565,37 @@ public:
             force_collection.push_back(p_test_force);
         
             // Create a timestepper class and call for a time step using the current method
-            AltMethodsTimestepper<2,2> timestepper(cell_population, force_collection);
             double time_step = 1e-2;
-            timestepper.UpdateAllNodePositions(time_step, method);
+            switch (method) {
+                case StepperChoice::EULER: 
+                {
+                     ForwardEulerNumericalMethodTimestepper<2,2> timestepper = 
+                     ForwardEulerNumericalMethodTimestepper<2,2>(cell_population, force_collection);
+                     timestepper.UpdateAllNodePositions(time_step);
+                }
+                break;
+                case StepperChoice::RK4:
+                {
+                     RK4NumericalMethodTimestepper<2,2> timestepper =
+                     RK4NumericalMethodTimestepper<2,2>(cell_population, force_collection);
+                     timestepper.UpdateAllNodePositions(time_step);
+                }
+                break;
+                case StepperChoice::BACKWARDEULER:
+                {
+                     BackwardEulerNumericalMethodTimestepper<2,2> timestepper =
+                     BackwardEulerNumericalMethodTimestepper<2,2>(cell_population, force_collection);
+                     timestepper.UpdateAllNodePositions(time_step);
+                }
+                break;
+                case StepperChoice::ADAMSMOULTON:
+                {
+                     AdamsMoultonNumericalMethodTimestepper<2,2> timestepper =
+                     AdamsMoultonNumericalMethodTimestepper<2,2>(cell_population, force_collection);
+                     timestepper.UpdateAllNodePositions(time_step);
+                }
+                break;
+            }
 
 
             // Check that cell locations were correctly updated 

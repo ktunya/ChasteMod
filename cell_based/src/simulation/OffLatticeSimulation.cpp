@@ -45,6 +45,10 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "LogFile.hpp"
 #include "Version.hpp"
 #include "ExecutableSupport.hpp"
+#include "ForwardEulerNumericalMethodTimestepper.hpp"
+#include "RK4NumericalMethodTimestepper.hpp"
+#include "AdamsMoultonNumericalMethodTimestepper.hpp"
+#include "BackwardEulerNumericalMethodTimestepper.hpp"
 #include "StepSizeException.hpp"
 #include "Warnings.hpp" 
 
@@ -55,14 +59,10 @@ OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPo
                                                 bool initialiseCells,
                                                 bool adaptiveChoice,
                                                 int  stepperChoice)
-    : AbstractCellBasedSimulation<ELEMENT_DIM,SPACE_DIM>(
-        rCellPopulation,
-        deleteCellPopulationInDestructor,
-        initialiseCells),
+    : AbstractCellBasedSimulation<ELEMENT_DIM,SPACE_DIM>(rCellPopulation, deleteCellPopulationInDestructor, initialiseCells),
       adaptive(adaptiveChoice),
       stepper(stepperChoice),
-      timestepper(AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>( static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>&>(rCellPopulation), 
-                                                       mForceCollection ))
+      timestepper(NULL)
 {
 
     if (!dynamic_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&rCellPopulation))
@@ -92,7 +92,39 @@ OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPo
         // comment out the line below
         NEVER_REACHED;
     }
+
+    AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>& popRef = static_cast<AbstractOffLatticeCellPopulation<ELEMENT_DIM, SPACE_DIM>&>(rCellPopulation);
+    switch (stepper) {
+        case StepperChoice::EULER: 
+        {
+            timestepper = new ForwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>(popRef, mForceCollection);
+        }
+        break;
+        case StepperChoice::RK4:
+        {
+            timestepper = new RK4NumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>(popRef, mForceCollection);
+        }
+        break;
+        case StepperChoice::BACKWARDEULER:
+        {
+            timestepper = new BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>(popRef, mForceCollection);
+        }
+        break;
+        case StepperChoice::ADAMSMOULTON:
+        {
+            timestepper = new AdamsMoultonNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>(popRef, mForceCollection);
+        }
+        break;
+    }
 }
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::~OffLatticeSimulation(){
+    delete timestepper;
+};
+
+
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::AddForce(boost::shared_ptr<AbstractForce<ELEMENT_DIM,SPACE_DIM> > pForce)
@@ -145,7 +177,7 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
 
         try{
 
-            timestepper.UpdateAllNodePositions(currentStepSize, stepper);
+            timestepper->UpdateAllNodePositions(currentStepSize);
             
             ApplyBoundaries(old_node_locations);
 

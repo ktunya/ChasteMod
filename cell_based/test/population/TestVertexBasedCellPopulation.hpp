@@ -58,7 +58,11 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "SmartPointers.hpp"
 #include "FileComparison.hpp"
 #include "ShortAxisVertexBasedDivisionRule.hpp"
-#include "AltMethodsTimestepper.hpp"
+#include "AbstractNumericalMethodTimestepper.hpp"
+#include "AdamsMoultonNumericalMethodTimestepper.hpp"
+#include "ForwardEulerNumericalMethodTimestepper.hpp"
+#include "BackwardEulerNumericalMethodTimestepper.hpp"
+#include "RK4NumericalMethodTimestepper.hpp"
 #include "PopulationTestingForce.hpp"
 #include "StepperChoice.hpp"
 
@@ -1363,7 +1367,7 @@ public:
         RandomNumberGenerator* p_random_num_gen = RandomNumberGenerator::Instance();
         
         // Repeat the update test for each numerical method:
-        for(int method = StepperChoice::EULER; method != StepperChoice::LAST; method++){
+        for(int method = StepperChoice::EULER; method != StepperChoice::ADAMSMOULTON; method++){
 
             // Prepare for new run
             RandomNumberGenerator::Instance()->Reseed(0);
@@ -1396,11 +1400,39 @@ public:
             std::vector<boost::shared_ptr<AbstractForce<2,2> > > force_collection;
             MAKE_PTR(PopulationTestingForce<2>, p_test_force);
             force_collection.push_back(p_test_force);
-            AltMethodsTimestepper<2,2> timestepper(cell_population, force_collection);
 
             // Call for a time step
-            double time_step = 0.01;
-            timestepper.UpdateAllNodePositions(time_step, method);
+            double time_step = 1e-2;
+            switch (method) {
+                case StepperChoice::EULER: 
+                {
+                     ForwardEulerNumericalMethodTimestepper<2,2> timestepper = 
+                     ForwardEulerNumericalMethodTimestepper<2,2>(cell_population, force_collection);
+                     timestepper.UpdateAllNodePositions(time_step);
+                }
+                break;
+                case StepperChoice::RK4:
+                {
+                     RK4NumericalMethodTimestepper<2,2> timestepper =
+                     RK4NumericalMethodTimestepper<2,2>(cell_population, force_collection);
+                     timestepper.UpdateAllNodePositions(time_step);
+                }
+                break;
+                case StepperChoice::BACKWARDEULER:
+                {
+                     BackwardEulerNumericalMethodTimestepper<2,2> timestepper =
+                     BackwardEulerNumericalMethodTimestepper<2,2>(cell_population, force_collection);
+                     timestepper.UpdateAllNodePositions(time_step);
+                }
+                break;
+                case StepperChoice::ADAMSMOULTON:
+                {
+                     AdamsMoultonNumericalMethodTimestepper<2,2> timestepper =
+                     AdamsMoultonNumericalMethodTimestepper<2,2>(cell_population, force_collection);
+                     timestepper.UpdateAllNodePositions(time_step);
+                }
+                break;
+            }
 
             for (unsigned i=0; i<cell_population.GetNumNodes(); i++)
             {

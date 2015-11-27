@@ -33,24 +33,20 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#ifndef ALTMETHODSTIMESTEPPER_HPP_
-#define ALTMETHODSTIMESTEPPER_HPP_
+#ifndef ABSTRACTNUMERICALMETHODTIMESTEPPER_HPP_
+#define ABSTRACTNUMERICALMETHODTIMESTEPPER_HPP_
 
 #include "AbstractOffLatticeCellPopulation.hpp"
 #include "AbstractForce.hpp"
-#include "SimplePetscNonlinearSolver.hpp"
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-class AltMethodsTimestepper {
+class AbstractNumericalMethodTimestepper {
 
-private:
+protected:
 
 	AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>&                  rCellPopulation;
 	std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >&  rForceCollection;
-
-	SimplePetscNonlinearSolver* pNonlinearSolver;
-	double implicitStepSize;
 
 	bool nonEulerSteppersEnabled; 
 	bool ghostNodeForcesEnabled;
@@ -63,37 +59,14 @@ private:
 
 public:	
 	
-	AltMethodsTimestepper(AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>&  inputCellPopulation, 
-                std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >&  inputForceCollection);
+	AbstractNumericalMethodTimestepper(AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>&  inputCellPopulation, 
+                                       std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >&  inputForceCollection);
 
-	~AltMethodsTimestepper();
 
-	void UpdateAllNodePositions(double dt, int stepper);
+	virtual ~AbstractNumericalMethodTimestepper();
 
-	void BACKWARDEULERComputeResidual(const Vec currentGuess, Vec residualVector);
+	virtual void UpdateAllNodePositions(double dt);
 
-	void ADAMSMOULTONComputeResidual(const Vec currentGuess, Vec residualVector);
 };
 
-
-/*
-* Global residual functions for use with implicit steppers
-*/
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-PetscErrorCode BACKWARDEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext){
-
-    AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
-    pStepper->BACKWARDEULERComputeResidual(currentGuess, residualVector);
-
-    return 0;
-};
-template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
-PetscErrorCode ADAMSMOULTON_ComputeResidual(SNES snes, Vec currentGuess, Vec residualVector, void* pContext){
-
-    AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
-    pStepper->ADAMSMOULTONComputeResidual(currentGuess, residualVector);
-
-    return 0;
-};
-
-#endif /*ALTMETHODSTIMESTEPPER_HPP_*/
+#endif /*ABSTRACTNUMERICALMETHODTIMESTEPPER_HPP_*/

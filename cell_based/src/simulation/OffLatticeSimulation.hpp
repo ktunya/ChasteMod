@@ -36,7 +36,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef OFFLATTICESIMULATION_HPP_
 #define OFFLATTICESIMULATION_HPP_
 
-#include "AltMethodsTimestepper.hpp"
+#include "AbstractNumericalMethodTimestepper.hpp"
 #include "AbstractCellBasedSimulation.hpp"
 #include "AbstractForce.hpp"
 #include "AbstractCellPopulationBoundaryCondition.hpp"
@@ -96,7 +96,7 @@ private:
     /** Choice of timestepping scheme (Euler, RK etc) **/
     int stepper;
 
-    AltMethodsTimestepper<ELEMENT_DIM, SPACE_DIM> timestepper;
+    AbstractNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>* timestepper;
 
 protected:
 
@@ -173,6 +173,13 @@ public:
                          bool initialiseCells = true,
                          bool adaptiveChoice = false,
                          int  stepperChoice = StepperChoice::EULER);
+
+
+    /*
+    * Frees the timestepper
+    */
+    virtual ~OffLatticeSimulation();
+
 
     /**
      * Add a force to be used in this simulation (use this to set the mechanics system).

@@ -210,7 +210,7 @@ public:
 
     /**
      * Overridden UpdateNodeLocations() method. Now does nothing, since node updates are handled
-     * by AltMethodsTimestepper for AbstractCentreBasedPopulations.
+     * by an AbstractNumericalMethodTimestepper for AbstractCentreBasedPopulations.
      *
      * @param dt the time step
      */
