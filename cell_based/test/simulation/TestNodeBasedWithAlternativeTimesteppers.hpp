@@ -62,8 +62,8 @@ class TestNodeBasedWithAlternativeTimesteppers : public AbstractCellBasedWithTim
 
 public:
     
-    enum RunChoices {EULER, RK4, BACKWARDEULER, ALL};
-    static const int toRun = ALL;
+    enum RunChoices {EULER, RK4, BACKWARDEULER, ADAMSMOULTON, ALL};
+    static const int toRun = ADAMSMOULTON;
 
     enum CycleModel {STOCHASTIC, FIXEDTIMINGS};
     static const int CCmodel = FIXEDTIMINGS;
@@ -388,6 +388,56 @@ public:
         }*/   
     }
 
+    void Test3dNodeBasedWithAdamsMoultonStepper() throw (Exception)
+    {
+        if(toRun == ADAMSMOULTON || toRun == ALL){
+            
+            setupTestParameters();
+
+            for(int i = minStepIndex; i <= maxStepIndex; i++){
+
+                double movementThresh = movThresholds[i];
+                int stepsPerHour = stepsPerHour_DoesNotExceedMovThresh[i];
+                double dt = 1.0/(double)stepsPerHour;
+
+                resetForNewRun();
+
+                std::vector<Node<3>*> nodes;
+                nodes.push_back(new Node<3>(0, false,  0.5, 0.0, 0.0));
+                nodes.push_back(new Node<3>(1, false, -0.5, 0.0, 0.0));
+            
+                NodesOnlyMesh<3> mesh;
+                mesh.ConstructNodesWithoutMesh(nodes, 3.0);
+
+                std::vector<CellPtr> cells;
+                GenerateStemCells(cells, mesh.GetNumNodes());
+
+                NodeBasedCellPopulation<3>* cellPopulation = new NodeBasedCellPopulation<3>(mesh, cells);
+                cellPopulation->SetAbsoluteMovementThreshold(movementThresh);
+                cellPopulation->SetDampingConstantNormal(1.1);
+
+                OffLatticeSimulation<3> simulation(*cellPopulation, false, true,  false, StepperChoice::ADAMSMOULTON);
+                std::ostringstream outDir;
+                outDir << "NB_AdamsMoulton_Rep" << i;
+                setupSimulation(&simulation, outDir.str(), stepsPerHour);
+
+                // Add a cell movement tracker 
+                MAKE_PTR_ARGS(SimpleCellCentrePositionTracker<3>, pTracking, (stepsPerHour,1));
+                simulation.AddSimulationModifier(pTracking);
+
+                int startT = time(0);
+                std::cout << "Dt = " << dt << " Absolute Movement Threshold = " << movementThresh << std::endl;
+                simulation.Solve();
+                std::cout << "Time elapsed: " << time(0) - startT << endl; 
+
+                //if(i==5){ checkAgreementAtFifthStepSize(outDir.str(), pTracking->GetOutputDirectoryFull()); }
+
+                delete nodes[0];
+                delete nodes[1];
+            }
+        }    
+    }
+
 
 
     //----------------------------------------------------------------------------------------------
@@ -408,11 +458,12 @@ public:
 
     void setupTestParameters(){ 
         
-        minStepIndex = 0;
+        minStepIndex = 7;
         maxStepIndex = 8;
         endTime = 100;
  
-        double threshes[9] = {0.005, 0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.3, 0.5};
+        // double threshes[9] = {0.005, 0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.5, 2.0};
+        double threshes[9] = {0.01, 0.02, 0.04, 0.06, 0.2, 0.4, 0.8, 2.0, 8.0};
         movThresholds = std::vector<double>(&threshes[0], &threshes[0]+9);
 
         stepsPerHour_DoesNotExceedMovThresh = std::vector<int>();
