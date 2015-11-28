@@ -45,7 +45,7 @@ BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM> :: BackwardEulerN
 :AbstractNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM> ( inputCellPopulation, inputForceCollection)
 {	
     pNonlinearSolver = new SimplePetscNonlinearSolver();
-    pNonlinearSolver->SetTolerance(1e-5);
+    pNonlinearSolver->SetTolerance(1e-7);
     implicitStepSize = 0;
 };
 

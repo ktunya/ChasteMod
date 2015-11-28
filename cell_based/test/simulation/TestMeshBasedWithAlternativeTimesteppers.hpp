@@ -66,7 +66,7 @@ class TestMeshBasedWithAlternativeTimesteppers : public AbstractCellBasedWithTim
 public:
 
     enum RunChoices {EULER, RK4, BACKWARDEULER, ALL};
-    static const int toRun = RK4;
+    static const int toRun = ALL;
 
     enum CycleModel {STOCHASTIC, FIXEDTIMINGS};
     static const int CCmodel = FIXEDTIMINGS;

@@ -63,7 +63,7 @@ class TestNodeBasedWithAlternativeTimesteppers : public AbstractCellBasedWithTim
 public:
     
     enum RunChoices {EULER, RK4, BACKWARDEULER, ADAMSMOULTON, ALL};
-    static const int toRun = ADAMSMOULTON;
+    static const int toRun = BACKWARDEULER;
 
     enum CycleModel {STOCHASTIC, FIXEDTIMINGS};
     static const int CCmodel = FIXEDTIMINGS;

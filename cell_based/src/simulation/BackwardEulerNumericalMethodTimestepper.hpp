@@ -58,7 +58,12 @@ public:
 
 	void BACKWARDEULERComputeResidual(const Vec currentGuess, Vec residualVector);
 
+  void BACKWARDEULERComputeSpringJacobian(Vec input, Mat* pJacobian);
+
 };
+
+
+
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
@@ -69,5 +74,30 @@ PetscErrorCode BACKWARDEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec re
 
     return 0;
 };
+
+#if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+PetscErrorCode BACKWARDEULER_ComputeSpringJacobian(SNES snes, Vec input, Mat jacobian, Mat preconditioner, void* pContext){
+
+    BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
+    pStepper->BACKWARDEULERComputeSpringJacobian(input, &jacobian);
+
+    return 0;
+};
+
+#else
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+PetscErrorCode BACKWARDEULER_ComputeSpringJacobian(SNES snes, Vec input, Mat* pJacobian, Mat* pPreconditioner, MatStructure* pMatStructure, void* pContext){
+
+    BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
+    pStepper->BACKWARDEULERComputeSpringJacobian(input, pJacobian);
+
+    return 0;
+};
+
+#endif
+
 
 #endif /*BACKWARDEULERNUMERICALMETHODTIMESTEPPER_HPP_*/
