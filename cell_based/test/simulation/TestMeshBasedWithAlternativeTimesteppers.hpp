@@ -65,11 +65,11 @@ class TestMeshBasedWithAlternativeTimesteppers : public AbstractCellBasedWithTim
 {
 public:
 
-    enum RunChoices {EULER, RK4, BACKWARDEULER, ALL};
-    static const int toRun = ALL;
+    enum RunChoices {EULER, RK4, BACKWARDEULER, ADAMSMOULTON, ALL};
+    static const int toRun = ADAMSMOULTON;
 
     enum CycleModel {STOCHASTIC, FIXEDTIMINGS};
-    static const int CCmodel = FIXEDTIMINGS;
+    static const int CCmodel = STOCHASTIC;
 
 
     void TestMeshBasedWithEulerStepper() throw (Exception)
@@ -85,8 +85,8 @@ public:
                 double dt = 1.0/(double)stepsPerHour;
                 resetForNewRun();
 
-                // Create a 2d mesh-based cell population with 1 row of ghost nodes
-				HoneycombMeshGenerator generator(meshSide, meshSide, 1);
+                // Create a 2d mesh-based cell population with 2 rows of ghost nodes
+				HoneycombMeshGenerator generator(meshSide, meshSide, 2);
         		MutableMesh<2,2>* p_mesh = generator.GetMesh();
         		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
 
@@ -102,7 +102,7 @@ public:
                 // Create a simulation-----------------------------------------------------------------------
                 OffLatticeSimulation<2> simulation(cellPopulation, false, true, false, StepperChoice::EULER);
                 std::ostringstream outDir;
-                outDir << "MBG_Euler_Thresh" << movementThresh;
+                outDir << "MBG_Euler_Fixed_Rep" << i;
                 setupSimulation(&simulation, outDir.str(), stepsPerHour);
                 // ------------------------------------------------------------------------------------------
 
@@ -116,55 +116,6 @@ public:
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
             }
         }
-    }
-
-
-    void TestMeshBasedWithEulerStepperAdaptive() throw (Exception)
-    {
-    	/*if(toRun == EULER || toRun == ALL){
-
-            setupTestParameters();
-
-            for(int i = minStepIndex; i <= maxStepIndex; i++){
-
-                double movementThresh = movThresholds[i];
-                int stepsPerHour = stepsPerHour_ExceedsMovThresh[i];
-                double dt = 1.0/(double)stepsPerHour;
-                resetForNewRun();
-
-                // Create a 2d mesh-based cell population with 1 row of ghost nodes
-				HoneycombMeshGenerator generator(meshSide, meshSide, 1);
-        		MutableMesh<2,2>* p_mesh = generator.GetMesh();
-        		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
-
-        		std::vector<CellPtr> cells;
-        		MAKE_PTR(StemCellProliferativeType, p_stem_type);
-        		CellsGenerator<StochasticDurationCellCycleModel, 2> cells_generator;
-        		cells_generator.GenerateBasic(cells, location_indices.size(), location_indices, p_stem_type);
-		
-        		MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
-        		cellPopulation.CreateVoronoiTessellation();
-        		cellPopulation.AddPopulationWriter<VoronoiDataWriter>();
-        		cellPopulation.SetAbsoluteMovementThreshold(movementThresh);
-                cellPopulation.SetDampingConstantNormal(1.1);
-
-                // Create a simulation-----------------------------------------------------------------------
-                OffLatticeSimulation<2> simulation(cellPopulation, false, true, true, StepperChoice::EULER);
-                std::ostringstream outDir;
-                outDir << "MBG_AdaptiveEuler_Thresh" << movementThresh;
-                setupSimulation(&simulation, outDir.str(), stepsPerHour);
-                // ------------------------------------------------------------------------------------------
-
-                // Add a cell movement tracker 
-                MAKE_PTR_ARGS(SimpleCellCentrePositionTracker<2>, pTracking, (stepsPerHour,1));
-                simulation.AddSimulationModifier(pTracking);
-
-                int startT = time(0);
-                std::cout << "Dt = " << dt << " Absolute Movement Threshold = " << movementThresh << std::endl;
-                simulation.Solve();
-                std::cout << "Time elapsed: " << time(0) - startT << endl; 
-            }
-        }*/
     }
 
 
@@ -181,24 +132,24 @@ public:
                 double dt = 1.0/(double)stepsPerHour;
                 resetForNewRun();
 
-                // Create a 2d mesh-based cell population with 1 row of ghost nodes
-				HoneycombMeshGenerator generator(meshSide, meshSide, 1);
-        		MutableMesh<2,2>* p_mesh = generator.GetMesh();
-        		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
+                // Create a 2d mesh-based cell population with 2 rows of ghost nodes
+                HoneycombMeshGenerator generator(meshSide, meshSide, 2);
+                MutableMesh<2,2>* p_mesh = generator.GetMesh();
+                std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
 
-        		std::vector<CellPtr> cells;
-        		GenerateStemCells(cells, location_indices.size(), location_indices);
-		
-        		MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
-        		cellPopulation.CreateVoronoiTessellation();
-        		cellPopulation.AddPopulationWriter<VoronoiDataWriter>();
-        		cellPopulation.SetAbsoluteMovementThreshold(movementThresh);
+                std::vector<CellPtr> cells;
+                GenerateStemCells(cells, location_indices.size(), location_indices);
+        
+                MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
+                cellPopulation.CreateVoronoiTessellation();
+                cellPopulation.AddPopulationWriter<VoronoiDataWriter>();
+                cellPopulation.SetAbsoluteMovementThreshold(movementThresh);
                 cellPopulation.SetDampingConstantNormal(1.1);
-
+                
                 // Create a simulation-----------------------------------------------------------------------
                 OffLatticeSimulation<2> simulation(cellPopulation, false, true, false, StepperChoice::RK4);
                 std::ostringstream outDir;
-                outDir << "MBG_RK4_Thresh" << movementThresh;
+                outDir << "MBG_RK4_Fixed_Rep" << i;
                 setupSimulation(&simulation, outDir.str(), stepsPerHour);
                 // ------------------------------------------------------------------------------------------
 
@@ -214,56 +165,6 @@ public:
         }
     }
 
-
-    void TestMeshBasedWithRK4StepperAdaptive() throw (Exception)
-    {
-    	/*if(toRun == RK4 || toRun == ALL){
-
-            setupTestParameters();
-
-            for(int i = minStepIndex; i <= maxStepIndex; i++){
-
-                double movementThresh = movThresholds[i];
-                int stepsPerHour = stepsPerHour_ExceedsMovThresh[i];
-                double dt = 1.0/(double)stepsPerHour;
-                resetForNewRun();
-
-                // Create a 2d mesh-based cell population with 1 row of ghost nodes
-				HoneycombMeshGenerator generator(meshSide, meshSide, 1);
-        		MutableMesh<2,2>* p_mesh = generator.GetMesh();
-        		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
-
-        		std::vector<CellPtr> cells;
-        		MAKE_PTR(StemCellProliferativeType, p_stem_type);
-        		CellsGenerator<StochasticDurationCellCycleModel, 2> cells_generator;
-        		cells_generator.GenerateBasic(cells, location_indices.size(), location_indices, p_stem_type);
-		
-        		MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
-        		cellPopulation.CreateVoronoiTessellation();
-        		cellPopulation.AddPopulationWriter<VoronoiDataWriter>();
-        		cellPopulation.SetAbsoluteMovementThreshold(movementThresh);
-                cellPopulation.SetDampingConstantNormal(1.1);
-                
-                // Create a simulation-----------------------------------------------------------------------
-                OffLatticeSimulation<2> simulation(cellPopulation, false, true, true, StepperChoice::RK4);
-                std::ostringstream outDir;
-                outDir << "MBG_AdaptiveRK4_Thresh" << movementThresh;
-                setupSimulation(&simulation, outDir.str(), stepsPerHour);
-                // ------------------------------------------------------------------------------------------
-
-                // Add a cell movement tracker 
-                MAKE_PTR_ARGS(SimpleCellCentrePositionTracker<2>, pTracking, (stepsPerHour,1));
-                simulation.AddSimulationModifier(pTracking);
-
-                int startT = time(0);
-                std::cout << "Dt = " << dt << " Absolute Movement Threshold = " << movementThresh << std::endl;
-                simulation.Solve();
-                std::cout << "Time elapsed: " << time(0) - startT << endl; 
-            }
-        }*/
-    }
-
-
     void TestMeshBasedWithBackwardEulerStepper() throw (Exception)
     {
     	if(toRun == BACKWARDEULER || toRun == ALL){
@@ -277,8 +178,8 @@ public:
                 double dt = 1.0/(double)stepsPerHour;
                 resetForNewRun();
 
-                // Create a 2d mesh-based cell population with 1 row of ghost nodes
-				HoneycombMeshGenerator generator(meshSide, meshSide, 1);
+                // Create a 2d mesh-based cell population with 2 rows of ghost nodes
+				HoneycombMeshGenerator generator(meshSide, meshSide, 2);
         		MutableMesh<2,2>* p_mesh = generator.GetMesh();
         		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
 
@@ -294,7 +195,7 @@ public:
                 // Create a simulation-----------------------------------------------------------------------
                 OffLatticeSimulation<2> simulation(cellPopulation, false, true, false, StepperChoice::BACKWARDEULER);
                 std::ostringstream outDir;
-                outDir << "MBG_BackwardEuler_Thresh" << movementThresh;
+                outDir << "MBG_BackwardEuler_Rep" << i;
                 setupSimulation(&simulation, outDir.str(), stepsPerHour);
                 // ------------------------------------------------------------------------------------------
 
@@ -311,39 +212,37 @@ public:
     }
 
 
-    void TestMeshBasedWithBackwardEulerStepperAdaptive() throw (Exception)
+    void TestMeshBasedWithAdamsMoultonStepper() throw (Exception)
     {
-    	/*if(toRun == BACKWARDEULER || toRun == ALL){
+        if(toRun == ADAMSMOULTON || toRun == ALL){
 
             setupTestParameters();
 
             for(int i = minStepIndex; i <= maxStepIndex; i++){
 
                 double movementThresh = movThresholds[i];
-                int stepsPerHour = stepsPerHour_ExceedsMovThresh[i];
+                int stepsPerHour = stepsPerHour_DoesNotExceedMovThresh[i];
                 double dt = 1.0/(double)stepsPerHour;
                 resetForNewRun();
 
-                // Create a 2d mesh-based cell population with 1 row of ghost nodes
-				HoneycombMeshGenerator generator(meshSide, meshSide, 1);
-        		MutableMesh<2,2>* p_mesh = generator.GetMesh();
-        		std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
+                // Create a 2d mesh-based cell population with 2 rows of ghost nodes
+                HoneycombMeshGenerator generator(meshSide, meshSide, 2);
+                MutableMesh<2,2>* p_mesh = generator.GetMesh();
+                std::vector<unsigned> location_indices = generator.GetCellLocationIndices();
 
-        		std::vector<CellPtr> cells;
-        		MAKE_PTR(StemCellProliferativeType, p_stem_type);
-        		CellsGenerator<StochasticDurationCellCycleModel, 2> cells_generator;
-        		cells_generator.GenerateBasic(cells, location_indices.size(), location_indices, p_stem_type);
-		
-        		MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
-        		cellPopulation.CreateVoronoiTessellation();
-        		cellPopulation.AddPopulationWriter<VoronoiDataWriter>();
-        		cellPopulation.SetAbsoluteMovementThreshold(movementThresh);
+                std::vector<CellPtr> cells;
+                GenerateStemCells(cells, location_indices.size(), location_indices);
+        
+                MeshBasedCellPopulationWithGhostNodes<2> cellPopulation(*p_mesh, cells, location_indices);
+                cellPopulation.CreateVoronoiTessellation();
+                cellPopulation.AddPopulationWriter<VoronoiDataWriter>();
+                cellPopulation.SetAbsoluteMovementThreshold(movementThresh);
                 cellPopulation.SetDampingConstantNormal(1.1);
                 
                 // Create a simulation-----------------------------------------------------------------------
-                OffLatticeSimulation<2> simulation(cellPopulation, false, true, true, StepperChoice::BACKWARDEULER);
+                OffLatticeSimulation<2> simulation(cellPopulation, false, true, false, StepperChoice::ADAMSMOULTON);
                 std::ostringstream outDir;
-                outDir << "MBG_AdaptiveBackwardEuler_Thresh" << movementThresh;
+                outDir << "MBG_AdamsMoulton_Rep" << i;
                 setupSimulation(&simulation, outDir.str(), stepsPerHour);
                 // ------------------------------------------------------------------------------------------
 
@@ -356,8 +255,9 @@ public:
                 simulation.Solve();
                 std::cout << "Time elapsed: " << time(0) - startT << endl; 
             }
-        }*/
+        }
     }
+
 
 
     //-------------------------------------------------------------------------------------------------------------------------------
@@ -380,17 +280,20 @@ public:
 
     void setupTestParameters(){ 
         
-        minStepIndex = 5;
-        maxStepIndex = 11;
+        minStepIndex = 3;
+        maxStepIndex = 8;
         meshSide = 3;
         endTime = 100;
  
-        double threshes[12] = {0.005, 0.01,  0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
-        movThresholds = std::vector<double>(&threshes[0], &threshes[0]+12);
-        int steps1[12] =      {6000,  3000,  1500, 900,  800,  600,  300, 200, 150,  100,  80,  60 };
-        stepsPerHour_DoesNotExceedMovThresh = std::vector<int>(&steps1[0], &steps1[0]+12);
-        int steps2[12] =      {3000,  1500,  750,  450,  400,  300,  150, 100,  75,  50,  40,  30 };
-        stepsPerHour_ExceedsMovThresh = std::vector<int>(&steps2[0], &steps2[0]+12);
+        double threshes[9] = {10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0};
+        movThresholds = std::vector<double>(&threshes[0], &threshes[0]+9);
+
+        stepsPerHour_DoesNotExceedMovThresh = std::vector<int>();
+        stepsPerHour_ExceedsMovThresh       = std::vector<int>();
+        for(int i=14; i>5; i--){
+            stepsPerHour_DoesNotExceedMovThresh.push_back((int)pow(2,i));
+            stepsPerHour_ExceedsMovThresh.push_back( (int)pow(2,(i-1)) );
+        } 
     }
 
 
@@ -439,7 +342,7 @@ public:
             if(CCmodel == STOCHASTIC){
                 p_cell_cycle_model = new StochasticDurationCellCycleModel();
             }else if(CCmodel == FIXEDTIMINGS){
-                p_cell_cycle_model = new FixedDivisionTimingsCellCycleModel(15);
+                p_cell_cycle_model = new FixedDivisionTimingsCellCycleModel(24);
             }else{
                 EXCEPTION("Choose a cell cycle model type");
             }
