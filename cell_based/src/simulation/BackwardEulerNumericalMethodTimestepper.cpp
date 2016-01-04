@@ -45,7 +45,7 @@ BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM> :: BackwardEulerN
 :AbstractNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM> ( inputCellPopulation, inputForceCollection)
 {	
     pNonlinearSolver = new SimplePetscNonlinearSolver();
-    pNonlinearSolver->SetTolerance(1e-7);
+    pNonlinearSolver->SetTolerance(1e-5);
     implicitStepSize = 0;
 };
 
@@ -82,7 +82,7 @@ void BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNo
 
       // Call nonlinear solver
       Vec solnNextTimestep = pNonlinearSolver->Solve( &BACKWARDEULER_ComputeResidual<ELEMENT_DIM, SPACE_DIM>,  
-                                                      SNESComputeJacobianDefault,  
+                                                      &SNESComputeJacobianDefault,  
                                                       initialCondition,   
                                                       UINT_MAX,          
                                                       this);              
