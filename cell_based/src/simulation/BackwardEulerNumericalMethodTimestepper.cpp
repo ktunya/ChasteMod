@@ -36,6 +36,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "BackwardEulerNumericalMethodTimestepper.hpp"
 #include "ReplicatableVector.hpp"
 #include "PetscVecTools.hpp"
+#include "PetscMatTools.hpp"
+#include "GeneralisedLinearSpringForce.hpp"
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>	
@@ -45,7 +47,7 @@ BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM> :: BackwardEulerN
 :AbstractNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM> ( inputCellPopulation, inputForceCollection)
 {	
     pNonlinearSolver = new SimplePetscNonlinearSolver();
-    pNonlinearSolver->SetTolerance(1e-7);
+    pNonlinearSolver->SetTolerance(1e-5);
     implicitStepSize = 0;
 };
 
@@ -82,7 +84,7 @@ void BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNo
 
       // Call nonlinear solver
       Vec solnNextTimestep = pNonlinearSolver->Solve( &BACKWARDEULER_ComputeResidual<ELEMENT_DIM, SPACE_DIM>,  
-                                                      SNESComputeJacobianDefault,  
+                                                      &SNESComputeJacobianDefault,  
                                                       initialCondition,   
                                                       UINT_MAX,          
                                                       this);              
@@ -159,6 +161,176 @@ void BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM>::BACKWARDEUL
         }
     } 
 };
+
+
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM>::BACKWARDEULERComputeSpringJacobian(const Vec input, Mat* pJacobian){
+
+  unsigned num_unknowns = SPACE_DIM * this->rCellPopulation.GetNumNodes();
+  unsigned num_nodes = this->rCellPopulation.GetNumNodes();
+  
+  ReplicatableVector inputPositions(input);
+
+  // Check that the force collection contains only a single GeneralizedLinearSpringForce, and extract its properties.-------------------------
+  if(this->rForceCollection.size() != 1){
+      EXCEPTION("Backward Euler method currently only supports a single GeneralizedLinearSpringForce.");
+  }
+  if(!bool(dynamic_cast< GeneralisedLinearSpringForce<ELEMENT_DIM, SPACE_DIM>* >( this->rForceCollection[0].get()) )){
+      EXCEPTION("Backward Euler method currently only has an analytic Jacobian for the GeneralizedLinearSpringForce.");
+  }
+
+  GeneralisedLinearSpringForce<ELEMENT_DIM, SPACE_DIM>* forceLawPtr = 
+          dynamic_cast< GeneralisedLinearSpringForce<ELEMENT_DIM, SPACE_DIM>* >(this->rForceCollection[0].get());
+
+  bool   useCutoff   = forceLawPtr->GetUseCutOffLength();
+  double cutoff      = forceLawPtr->GetCutOffLength();
+  double springConst = forceLawPtr->GetMeinekeSpringStiffness();
+  //------------------------------------------------------------------------------------------------------------------------------------------
+
+  // Loop over rows of the jacobian, calculating the value in each column---------------------------------------------------------------------
+  // N is the node whose position we are differentiating with respect to,
+  // w is the component of that position under consideration 
+
+  for (unsigned deriv_index = 0; deriv_index < num_unknowns; deriv_index++) 
+  {
+      int derivCellN = (int)(deriv_index / SPACE_DIM);
+      int derivCptW = (int)(deriv_index % SPACE_DIM); 
+
+      // Loop over cells
+      int NodeAIndex = 0;
+      for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator node_iter = this->rCellPopulation.rGetMesh().GetNodeIteratorBegin();
+           node_iter != this->rCellPopulation.rGetMesh().GetNodeIteratorEnd();
+           ++node_iter, ++NodeAIndex) 
+      {   
+
+          // Get properties of cell A
+          c_vector<double, SPACE_DIM> ALoc;
+          for(int i=0; i<SPACE_DIM; i++){
+              ALoc[i] = inputPositions[ NodeAIndex*SPACE_DIM + i ];
+          }
+          double ARad = node_iter->GetRadius();
+          
+          //Loop over potential neighbours and calculate contribution
+          c_vector<double,SPACE_DIM> dFA_dNw;
+          dFA_dNw[0] = 0;
+          dFA_dNw[1] = 0;
+          dFA_dNw[2] = 0;
+
+          int NodeBIndex = 0;
+          for (typename AbstractMesh<ELEMENT_DIM, SPACE_DIM>::NodeIterator neighbour_iter = this->rCellPopulation.rGetMesh().GetNodeIteratorBegin();
+               neighbour_iter != this->rCellPopulation.rGetMesh().GetNodeIteratorEnd();
+               ++neighbour_iter, ++NodeBIndex)
+          {
+
+              //Don't compare cells with themselves
+              if(neighbour_iter->GetIndex() != node_iter->GetIndex()){
+
+                  // Get properties of cell B
+                  c_vector<double, SPACE_DIM> BLoc;
+                  for(int i=0; i<SPACE_DIM; i++){
+                      BLoc[i] = inputPositions[ NodeBIndex*SPACE_DIM + i ];
+                  }
+                  double BRad = neighbour_iter->GetRadius();
+                  
+
+                  // Dirac delta. There is only a contribution if we're differentiating wrt A or B's position.
+                  bool N_equals_A = false;
+                  bool N_equals_B = false;
+                  if( NodeAIndex == derivCellN ){
+                      N_equals_A = true;
+                  }
+                  if( NodeBIndex == derivCellN ){
+                      N_equals_B = true;
+                  }
+
+    
+                  if(N_equals_A || N_equals_B){
+                      
+                      // Work out whether this neighbour is close enough to actually contribute to the force on A,
+                      // given the current input positions
+                      c_vector<double, SPACE_DIM> AtoB = this->rCellPopulation.rGetMesh().GetVectorFromAtoB(ALoc, BLoc);
+                      double separation = norm_2(AtoB); 
+                      c_vector<double, SPACE_DIM> AtoB_unit = AtoB/separation;
+                      double overlap = separation - ARad - BRad;
+                      //std::cout << "Overlap " << overlap << std::endl;
+    
+                      bool makesContribution = true;
+                      if(useCutoff){
+                          if(separation > cutoff){
+                              makesContribution = false;
+                              std::cout << "No contribution" << std::endl;
+                          }
+                      }
+    
+                      // Determine Jacobian contribution 
+                      if(makesContribution){
+    
+                          c_vector<double,SPACE_DIM> dSeparation;
+                          dSeparation[0] = 0;
+                          dSeparation[1] = 0;
+                          dSeparation[2] = 0;
+                          if(N_equals_A){
+                              dSeparation[derivCptW] = -AtoB[derivCptW]/separation;   
+                          }
+                          if(N_equals_B){
+                              dSeparation[derivCptW] = AtoB[derivCptW]/separation; 
+                          }
+    
+                          c_vector<double, SPACE_DIM> dAtoB_unit;
+                          dAtoB_unit[0] = 0;
+                          dAtoB_unit[1] = 0;
+                          dAtoB_unit[2] = 0;
+                          if(N_equals_A){
+                            for(int i=0; i<SPACE_DIM; i++){
+                              if(i == derivCptW){
+                                dAtoB_unit[i] = (-separation -  dSeparation[i] * AtoB[i]) / (separation*separation);
+                              }else{
+                                dAtoB_unit[i] = (-dSeparation[i] * AtoB[i]) / (separation*separation);
+                              }
+                            }
+                          }
+                          if(N_equals_B){
+                            for(int i=0; i<SPACE_DIM; i++){
+                              if(i == derivCptW){
+                                dAtoB_unit[i] = (separation -  dSeparation[i] * AtoB[i]) / (separation*separation);
+                              }else{
+                                dAtoB_unit[i] = (-dSeparation[i] * AtoB[i]) / (separation*separation);
+                              }
+                            }
+                          }
+    
+                          if(overlap < 0){
+                            //Log part of the force law applies
+                            for(int i=0; i<SPACE_DIM; i++){
+                              dFA_dNw[i] += springConst*(ARad+BRad)*( log(1+overlap/(ARad+BRad)) * dAtoB_unit[i] +
+                                                                       dSeparation[i] * ((ARad+BRad)/separation) * AtoB_unit[i] );
+                            }
+                          }else{
+                            //Exponential part of the force law applies
+                            for(int i=0; i<SPACE_DIM; i++){
+                              dFA_dNw[i] += springConst*(ARad+BRad)*( dSeparation[i]*( exp(-5*overlap/(ARad+BRad)) * AtoB_unit[i] ) + 
+                                                                        separation*(-5*dSeparation[i] * exp(-5*overlap/(ARad+BRad)) *AtoB_unit[i] +  exp(-5*overlap/(ARad+BRad)) *dAtoB_unit[i])  );
+                            }
+                          }
+                      }
+                  }
+              }
+          }
+
+          for(int i=0; i<SPACE_DIM; i++){
+            int JIndex = NodeAIndex*SPACE_DIM + i;
+            //std::cout << "i " << JIndex << " j " << deriv_index << " " << dFA_dNw[i] << std::endl;
+            PetscMatTools::SetElement(*pJacobian, JIndex, deriv_index, dFA_dNw[i]);
+          }
+          
+        }    
+    }
+
+    PetscMatTools::Finalise(*pJacobian); 
+};
+
 
 ///////// Explicit instantiation
 template class BackwardEulerNumericalMethodTimestepper<1,1>;

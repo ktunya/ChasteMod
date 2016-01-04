@@ -38,6 +38,10 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "AbstractNumericalMethodTimestepper.hpp"
 #include "SimplePetscNonlinearSolver.hpp"
+#include "PetscMatTools.hpp"
+#include "PetscVecTools.hpp"
+#include "PetscTools.hpp"
+
 
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
@@ -50,7 +54,7 @@ public:
 
 	
 	BackwardEulerNumericalMethodTimestepper(AbstractOffLatticeCellPopulation<ELEMENT_DIM,SPACE_DIM>&                  inputCellPopulation, 
-                                            std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >&  inputForceCollection);
+                                          std::vector<boost::shared_ptr<AbstractForce<ELEMENT_DIM, SPACE_DIM> > >&  inputForceCollection);
 
 	virtual ~BackwardEulerNumericalMethodTimestepper();
 
@@ -58,7 +62,7 @@ public:
 
 	void BACKWARDEULERComputeResidual(const Vec currentGuess, Vec residualVector);
 
-  void BACKWARDEULERComputeSpringJacobian(Vec input, Mat* pJacobian);
+  void BACKWARDEULERComputeSpringJacobian(const Vec currentGuess, Mat* pJacobian);
 
 };
 
@@ -75,6 +79,9 @@ PetscErrorCode BACKWARDEULER_ComputeResidual(SNES snes, Vec currentGuess, Vec re
     return 0;
 };
 
+
+
+
 #if ( PETSC_VERSION_MAJOR==3 && PETSC_VERSION_MINOR>=5 )
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
@@ -86,6 +93,32 @@ PetscErrorCode BACKWARDEULER_ComputeSpringJacobian(SNES snes, Vec input, Mat jac
     return 0;
 };
 
+/*
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+PetscErrorCode BACKWARDEULER_ComputeJacobianComparison(SNES snes, Vec input, Mat* pJacobian, Mat* pPreconditioner, MatStructure* pMatStructure, void* pContext){
+
+    BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
+    
+    pStepper->BACKWARDEULERComputeSpringJacobian(input, pJacobian);
+
+    Mat JacobianReference;
+    PetscTools::SetupMat(JacobianReference, num_unknowns, num_unknowns, UINT_MAX, PETSC_DECIDE, PETSC_DECIDE, true, false);
+    SNESComputeJacobianDefault(snes, input, &JacobianReference, &JacobianReference, pMatStructure, NULL);   
+
+    unsigned num_unknowns = PetscVecTools::GetSize(input);
+    if (!PetscMatTools::CheckEquality(*pJacobian, JacobianReference, 1e-6)) {
+      std::cout << "INCORRECT ANALYTIC JACOBIAN" << std::endl;
+      for (int i=0; i<num_unknowns; i++) {
+        for (int j=0; j<num_unknowns; j++) {
+          std::cout << "Jcpt " << i << " " << j << " ref: " << PetscMatTools::GetElement(JacobianReference,i,j) << " actual: " << PetscMatTools::GetElement(*pJacobian,i,j) << std::endl;
+        }
+      }
+      EXCEPTION("Jacobian exception.");
+    }
+
+    return 0;
+};*/
+
 #else
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
@@ -96,6 +129,34 @@ PetscErrorCode BACKWARDEULER_ComputeSpringJacobian(SNES snes, Vec input, Mat* pJ
 
     return 0;
 };
+
+/*
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+PetscErrorCode BACKWARDEULER_ComputeJacobianComparison(SNES snes, Vec input, Mat* pJacobian, Mat* pPreconditioner, MatStructure* pMatStructure, void* pContext){
+
+    unsigned num_unknowns = PetscVecTools::GetSize(input);
+
+    BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>* pStepper = (BackwardEulerNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>*)pContext; 
+    
+    pStepper->BACKWARDEULERComputeSpringJacobian(input, pJacobian);
+
+    Mat JacobianReference;
+    PetscTools::SetupMat(JacobianReference, num_unknowns, num_unknowns, UINT_MAX, PETSC_DECIDE, PETSC_DECIDE, true, false);
+    SNESComputeJacobianDefault(snes, input, &JacobianReference, &JacobianReference, pMatStructure, pContext);   
+
+    if(!PetscMatTools::CheckEquality(*pJacobian, JacobianReference, 1e-6)){
+      std::cout << "INCORRECT ANALYTIC JACOBIAN" << std::endl;
+      for (int i=0; i<num_unknowns; i++) {
+        for (int j=0; j<num_unknowns; j++) {
+          std::cout << "Jcpt " << i << " " << j << " ref: " << PetscMatTools::GetElement(JacobianReference,i,j) << " actual: " << PetscMatTools::GetElement(*pJacobian,i,j) << std::endl;
+        }
+      }
+      //EXCEPTION("Jacobian exception.");
+    }
+
+    return 0;
+};
+*/
 
 #endif
 
