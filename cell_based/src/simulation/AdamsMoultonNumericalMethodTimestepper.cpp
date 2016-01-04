@@ -82,7 +82,7 @@ void AdamsMoultonNumericalMethodTimestepper<ELEMENT_DIM,SPACE_DIM>::UpdateAllNod
 
         // Call nonlinear solver
         Vec solnNextTimestep = pNonlinearSolver->Solve( &ADAMSMOULTON_ComputeResidual<ELEMENT_DIM, SPACE_DIM>,  
-                                                         SNESComputeJacobianDefault,  
+                                                        &SNESComputeJacobianDefault,  
                                                          initialCondition,   
                                                          UINT_MAX,          
                                                          this);              
