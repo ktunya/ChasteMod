@@ -39,7 +39,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 template<unsigned DIM>
 BuskeElasticForce<DIM>::BuskeElasticForce()
    : AbstractTwoBodyInteractionForce<DIM>(),
-     mDeformationEnergyParameter(4.0/(3.0*5.0)) // Denoted by D in Buske et al (2011) (doi:10.1371/journal.pcbi.1001045).
+     mDeformationEnergyParameter((4.0/3.0)*pow(10,9)) // Denoted by D in Buske et al (2011) (doi:10.1371/journal.pcbi.1001045).
 {
 }
 
@@ -60,6 +60,17 @@ c_vector<double, DIM> BuskeElasticForce<DIM>::CalculateForceBetweenNodes(unsigne
                                                                              unsigned nodeBGlobalIndex,
                                                                              AbstractCellPopulation<DIM>& rCellPopulation)
 {
+    double isKnot1 = (rCellPopulation.GetCellUsingLocationIndex(nodeAGlobalIndex))->GetCellData()->GetItem("IsBuskeKnot");
+    double isKnot2 = (rCellPopulation.GetCellUsingLocationIndex(nodeAGlobalIndex))->GetCellData()->GetItem("IsBuskeKnot");
+
+    if(isKnot1==1 || isKnot2==1){
+        c_vector<double, DIM> zero_force;
+        for(int i=0; i<DIM; i++){
+            zero_force[i]=0;
+        }
+        return zero_force;
+    }
+
     // This force class is defined for NodeBasedCellPopulations only
     assert(dynamic_cast<NodeBasedCellPopulation<DIM>*>(&rCellPopulation) != NULL);
 
@@ -96,8 +107,8 @@ c_vector<double, DIM> BuskeElasticForce<DIM>::CalculateForceBetweenNodes(unsigne
     unit_vector /= distance_between_nodes;
 
     // Get the cell radii
-    double radius_of_cell_one = p_node_a->GetRadius();
-    double radius_of_cell_two = p_node_b->GetRadius();
+    double radius_of_cell_one = (rCellPopulation.GetCellUsingLocationIndex(nodeAGlobalIndex))->GetCellData()->GetItem("Radius");
+    double radius_of_cell_two = (rCellPopulation.GetCellUsingLocationIndex(nodeBGlobalIndex))->GetCellData()->GetItem("Radius");
 
     // Compute the force vector
     c_vector<double, DIM> force_between_nodes = GetMagnitudeOfForce(distance_between_nodes,radius_of_cell_one,radius_of_cell_two) * unit_vector;
@@ -114,7 +125,7 @@ double BuskeElasticForce<DIM>::GetMagnitudeOfForce(double distanceBetweenNodes, 
     if (distanceBetweenNodes < radiusOfCellOne + radiusOfCellTwo)
     {
         dWDdd = -pow(radiusOfCellOne + radiusOfCellTwo - distanceBetweenNodes,1.5)
-                *pow(radiusOfCellOne*radiusOfCellTwo/(radiusOfCellOne+radiusOfCellTwo),0.5)
+                *pow( ((radiusOfCellOne*radiusOfCellTwo)/(radiusOfCellOne+radiusOfCellTwo)) ,0.5)
                 /mDeformationEnergyParameter;
     }
     else  // no deformation energy contribution as too far apart
@@ -134,7 +145,10 @@ void BuskeElasticForce<DIM>::OutputForceParameters(out_stream& rParamsFile)
     AbstractTwoBodyInteractionForce<DIM>::OutputForceParameters(rParamsFile);
 }
 
+/////////////////////////////////////////////////////////////////////////////
 // Explicit instantiation
+/////////////////////////////////////////////////////////////////////////////
+
 template class BuskeElasticForce<1>;
 template class BuskeElasticForce<2>;
 template class BuskeElasticForce<3>;

@@ -39,8 +39,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 template<unsigned DIM>
 BuskeAdhesiveForce<DIM>::BuskeAdhesiveForce()
    : AbstractTwoBodyInteractionForce<DIM>(),
-     mAdhesionEnergyParameter(0.2)        // Denoted by epsilon in Buske et al (2011) (doi:10.1371/journal.pcbi.1001045).
-{
+     mAdhesionEnergyParameter(pow(2,-10))        // Denoted by epsilon in Buske et al (2011) (doi:10.1371/journal.pcbi.1001045).
+{                                           // Working in N/micron here.
 }
 
 template<unsigned DIM>
@@ -60,6 +60,17 @@ c_vector<double, DIM> BuskeAdhesiveForce<DIM>::CalculateForceBetweenNodes(unsign
                                                                           unsigned nodeBGlobalIndex,
                                                                           AbstractCellPopulation<DIM>& rCellPopulation)
 {
+    double isKnot1 = (rCellPopulation.GetCellUsingLocationIndex(nodeAGlobalIndex))->GetCellData()->GetItem("IsBuskeKnot");
+    double isKnot2 = (rCellPopulation.GetCellUsingLocationIndex(nodeAGlobalIndex))->GetCellData()->GetItem("IsBuskeKnot");
+
+    if(isKnot1==1 || isKnot2==1){
+        c_vector<double, DIM> zero_force;
+        for(int i=0; i<DIM; i++){
+            zero_force[i]=0;
+        }
+        return zero_force;
+    }
+
     // This force class is defined for NodeBasedCellPopulations only
     assert(dynamic_cast<NodeBasedCellPopulation<DIM>*>(&rCellPopulation) != NULL);
 
@@ -80,6 +91,7 @@ c_vector<double, DIM> BuskeAdhesiveForce<DIM>::CalculateForceBetweenNodes(unsign
     double distance_between_nodes = norm_2(unit_vector);
 
     // Account for any cutoff in the force law
+    //TODO: Watch out for the use of cutoffs here. I don't remember Buske mentioning that.
     if (this->mUseCutOffLength)
     {
         if (distance_between_nodes >= this->GetCutOffLength())
@@ -95,12 +107,13 @@ c_vector<double, DIM> BuskeAdhesiveForce<DIM>::CalculateForceBetweenNodes(unsign
     // Normalize the unit vector
     unit_vector /= distance_between_nodes;
 
-    double radius_of_cell_one = p_node_a->GetRadius();
-    double radius_of_cell_two = p_node_b->GetRadius();
+    double radius_of_cell_one = (rCellPopulation.GetCellUsingLocationIndex(nodeAGlobalIndex))->GetCellData()->GetItem("Radius");
+    double radius_of_cell_two = (rCellPopulation.GetCellUsingLocationIndex(nodeBGlobalIndex))->GetCellData()->GetItem("Radius");
 
     // Compute the force vector
     c_vector<double, DIM> force_between_nodes = GetMagnitudeOfForce(distance_between_nodes,radius_of_cell_one,radius_of_cell_two) * unit_vector;
 
+    //std::cout << force_between_nodes[0] << "\t"  << force_between_nodes[1] << "\t"   << force_between_nodes[2] << "\t" << std::endl;
     return force_between_nodes;
 }
 
@@ -116,6 +129,8 @@ double BuskeAdhesiveForce<DIM>::GetMagnitudeOfForce(double distanceBetweenNodes,
         double xij = 0.5*(radiusOfCellOne*radiusOfCellOne - radiusOfCellTwo*radiusOfCellTwo + distanceBetweenNodes*distanceBetweenNodes)/distanceBetweenNodes;
         double dxijdd = 1.0 - xij/distanceBetweenNodes;
         dWAdd = 2.0*mAdhesionEnergyParameter*M_PI*xij*dxijdd;
+
+        //std::cout << "dWAdd" << dWAdd << std::endl;
     }
 
     return dWAdd;
@@ -130,7 +145,10 @@ void BuskeAdhesiveForce<DIM>::OutputForceParameters(out_stream& rParamsFile)
     AbstractTwoBodyInteractionForce<DIM>::OutputForceParameters(rParamsFile);
 }
 
+/////////////////////////////////////////////////////////////////////////////
 // Explicit instantiation
+/////////////////////////////////////////////////////////////////////////////
+
 template class BuskeAdhesiveForce<1>;
 template class BuskeAdhesiveForce<2>;
 template class BuskeAdhesiveForce<3>;

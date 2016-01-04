@@ -70,6 +70,24 @@ private:
         archive & boost::serialization::base_object<NodeBasedCellPopulation<DIM> >(*this);
     }
 
+    double Eps; // Adhesion energy, denoted eps in Buske's paper
+    double K; //  Bulk modulus, denoted K in Buske's paper
+    double D; // Elasticity constant, denoted D in Buske's paper
+
+    bool allowRadiusVariation;
+    bool movementDisabled;
+    bool adhesionEnabled;
+    bool elasticityEnabled;
+    bool compressionEnabled;
+
+    double dampingConstantIntercell;
+    double dampingConstantVolume;
+    double dampingConstantMedium;
+
+    // Number of knots in the boundary condition. Assumed to be set by boundary condition classes
+    // at the start of a simulation, does not change during a simulation.
+    int numKnots;
+
 public:
 
     /**
@@ -93,6 +111,30 @@ public:
      * @param rMesh a mutable nodes-only mesh
      */
     NodeBasedCellPopulationWithBuskeUpdate(NodesOnlyMesh<DIM>& rMesh);
+
+
+    void EnableAdhesion(double eps);
+    void EnableElasticity(double d);
+    void EnableCompression(double k);
+
+    const double GetEps() const;
+    const double GetK() const;
+    const double GetD() const;
+    const double GetDampingConstantIntercell() const;
+    const double GetDampingConstantVolume() const;
+    const double GetDampingConstantMedium() const;
+    
+    const int GetNumKnots() const;
+    void SetNumKnots(int nKnots);
+
+    void SetDampingConstantIntercell(double inter);
+    void SetDampingConstantVolume(double vol);
+    void SetDampingConstantMedium(double med);
+
+    const bool GetUseVaryingRadii() const;
+    void SetUseVaryingRadii(bool radSetting);
+    const bool GetMovementDisabled() const;
+    void SetDisableMovement(bool movSetting);
 
     /**
      * Overridden UpdateNodeLocations() method. To use the update from Buske et al (2011) (doi:10.1371/journal.pcbi.1001045).
@@ -124,11 +166,32 @@ namespace serialization
  */
 template<class Archive, unsigned DIM>
 inline void save_construct_data(
-    Archive & ar, const NodeBasedCellPopulationWithBuskeUpdate<DIM> * t, const unsigned int file_version)
+    Archive & ar, const NodeBasedCellPopulationWithBuskeUpdate<DIM> * t, const BOOST_PFTO unsigned int file_version)
 {
     // Save data required to construct instance
     const NodesOnlyMesh<DIM>* p_mesh = &(t->rGetMesh());
     ar & p_mesh;
+
+    double k = t->GetK();
+    ar << k;
+    double eps = t->GetEps();
+    ar << eps;
+    double d = t->GetD();
+    ar << d;
+    double dampingIntercell = t->GetDampingConstantIntercell();
+    ar << dampingIntercell;
+    double dampingVolume = t->GetDampingConstantVolume();
+    ar << dampingVolume;
+    double dampingMedium = t->GetDampingConstantMedium();
+    ar << dampingMedium;
+
+    bool radialVariation = t->GetUseVaryingRadii();
+    ar << radialVariation;
+    bool movDisabled = t->GetMovementDisabled();
+    ar << movDisabled;
+
+    int nKnots = t->GetNumKnots(); 
+    ar << nKnots;
 }
 
 /**
@@ -143,8 +206,41 @@ inline void load_construct_data(
     NodesOnlyMesh<DIM>* p_mesh;
     ar >> p_mesh;
 
+    double k; double eps; double d;
+    ar >> k;
+    ar >> eps;
+    ar >> d;
+    double dampingIntercell; double dampingVolume; double dampingMedium;
+    ar >> dampingIntercell;
+    ar >> dampingVolume;
+    ar >> dampingMedium;
+    bool radialVariation; bool movDisabled;
+    ar >> radialVariation;
+    ar >> movDisabled;
+
+    int nKnots;
+    ar >> nKnots; 
+
     // Invoke inplace constructor to initialise instance
     ::new(t)NodeBasedCellPopulationWithBuskeUpdate<DIM>(*p_mesh);
+    if(k!=DOUBLE_UNSET){
+      t->EnableCompression(k);
+    }
+    if(eps!=DOUBLE_UNSET){
+        t->EnableAdhesion(eps);
+    }
+    if(d!=DOUBLE_UNSET){
+        t->EnableElasticity(d);
+    }
+    t->SetDampingConstantIntercell(dampingIntercell);
+    t->SetDampingConstantVolume(dampingVolume);
+    t->SetDampingConstantMedium(dampingMedium);
+    t->SetUseVaryingRadii(radialVariation);
+    t->SetDisableMovement(movDisabled);
+    if(nKnots!=0){
+        t->SetNumKnots(nKnots);
+    }
+
 }
 }
 } // namespace ...

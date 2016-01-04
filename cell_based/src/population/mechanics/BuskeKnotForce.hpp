@@ -33,25 +33,22 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#ifndef BUSKEADHESIVEFORCE_HPP_
-#define BUSKEADHESIVEFORCE_HPP_
+#ifndef BuskeKnotForce_HPP_
+#define BuskeKnotForce_HPP_
 
-#include "AbstractTwoBodyInteractionForce.hpp"
+#include "AbstractForce.hpp"
 
 #include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
 
 /**
- * A force law employed by Buske et al (2011) in their overlapping spheres
- * model of the intestinal crypt (doi:10.1371/journal.pcbi.1001045).
- *
- * Length is scaled by natural length. \todo does this mean natural radius of a cell? If so at what age? (#1764)
- * Time is in hours.
+ * Adds a Buske force exerted by Buske knots (see doi:10.1371/journal.pcbi.1001045).
+ * For use in conjunction with a Buske type boundary condition.
  */
 
 
 template<unsigned DIM>
-class BuskeAdhesiveForce : public AbstractTwoBodyInteractionForce<DIM>
+class BuskeKnotForce : public AbstractForce<DIM>
 {
     friend class TestForcesNotForRelease;
 private:
@@ -67,68 +64,94 @@ private:
     template<class Archive>
     void serialize(Archive & archive, const unsigned int version)
     {
-        archive & boost::serialization::base_object<AbstractTwoBodyInteractionForce<DIM> >(*this);
-        archive & mAdhesionEnergyParameter;
+        archive & boost::serialization::base_object<AbstractForce<DIM> >(*this);
+        archive & maxInteractionEnergy;
+        archive & thresholdAdhesionRatio;
     }
 
     /**
-     * Adhesion energy parameter.
-     *
-     * Represented by the parameter epsilon in the model by Buske et al (2011) in
-     * their off-lattice model of the intestinal crypt
-     * (doi:10.1371/journal.pcbi.1001045).
+     * Max interaction energy of a knot
      */
-    double mAdhesionEnergyParameter;
+    double maxInteractionEnergy;
+    
+    /**
+     * Defines the distance at which adhesion is overtaken by repulsion
+     */
+    double thresholdAdhesionRatio;
+
 
 public:
 
     /**
      * Constructor.
      */
-    BuskeAdhesiveForce();
+    BuskeKnotForce(double interaction = 1e-11, double omegaRatio = 0.95);
 
     /**
-     * @return #mAdhesionEnergyParameter.
+     * Setter/Getter methods for parameters
      */
-    double GetAdhesionEnergyParameter();
+    void SetMaxInteractionEnergy(double interaction);
+    void SetThresholdAdhesionRatio(double omegaRatio);
+    const double GetMaxInteractionEnergy() const;
+    const double GetThresholdAdhesionRatio() const;
 
-    /**
-     * Set mAdhesionEnergyParameter.
-     *
-     * @param adhesionEnergyParameter the new value of mAdhesionEnergyParameter
-     */
-    void SetAdhesionEnergyParameter(double adhesionEnergyParameter);
+    
+    /*
+    * Adds force contributions due to the knots in the cell population
+    */
+    void AddForceContribution(AbstractCellPopulation<DIM>& rCellPopulation);
 
-    /**
-     * @return the force between two nodes.
-     *
-     * Note that this assumes they are connected and is called by rCalculateVelocitiesOfEachNode()
-     *
-     * @param nodeAGlobalIndex index of one neighbouring node
-     * @param nodeBGlobalIndex index of the other neighbouring node
-     * @param rCellPopulation the cell population
-     */
-    c_vector<double, DIM> CalculateForceBetweenNodes(unsigned nodeAGlobalIndex, unsigned nodeBGlobalIndex, AbstractCellPopulation<DIM>& rCellPopulation);
-
-    /**
-     * @return Calculated magnitude of the force between two nodes that are a given distance apart and
-     * are associated with given cell radii.
-     *
-     * @param distanceBetweenNodes the distance between two nodes
-     * @param radiusOfCellOne radius of a cell
-     * @param radiusOfCellTwo radius of a cell
-     */
-    double GetMagnitudeOfForce(double distanceBetweenNodes, double radiusOfCellOne, double radiusOfCellTwo);
 
     /**
      * Overridden OutputForceParameters() method.
-     *
      * @param rParamsFile the file stream to which the parameters are output
      */
     virtual void OutputForceParameters(out_stream& rParamsFile);
+
 };
 
 #include "SerializationExportWrapper.hpp"
-EXPORT_TEMPLATE_CLASS_SAME_DIMS(BuskeAdhesiveForce)
+EXPORT_TEMPLATE_CLASS_SAME_DIMS(BuskeKnotForce)
 
-#endif /*BUSKEADHESIVEFORCE_HPP_*/
+
+
+namespace boost
+{
+namespace serialization
+{
+/**
+ * Serialize information required to construct a BuskeKnotForce.
+ */
+template<class Archive, unsigned DIM>
+inline void save_construct_data(
+    Archive & ar, const BuskeKnotForce<DIM>* t, const BOOST_PFTO unsigned int file_version)
+{
+
+    double maxInteract = t->GetMaxInteractionEnergy();
+    ar << maxInteract;
+
+    double threshAdhesion = t->GetThresholdAdhesionRatio();
+    ar << threshAdhesion;
+}
+
+/**
+ * De-serialize constructor parameters and initialize a BuskeKnotForce.
+ */
+template<class Archive, unsigned DIM>
+inline void load_construct_data(
+    Archive & ar, BuskeKnotForce<DIM>* t, const unsigned int file_version)
+{
+
+    double maxInteract;
+    ar >> maxInteract;
+
+    double threshAdhesion;
+    ar >> threshAdhesion;
+
+    // Invoke inplace constructor to initialise instance
+    ::new(t)BuskeKnotForce<DIM>(maxInteract, threshAdhesion);
+}
+}
+} // namespace ...
+
+#endif /*BuskeKnotForce_HPP_*/

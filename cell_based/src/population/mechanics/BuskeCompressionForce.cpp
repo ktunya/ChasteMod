@@ -35,11 +35,12 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "BuskeCompressionForce.hpp"
 #include "NodeBasedCellPopulation.hpp"
+#include "CellData.hpp"
 
 template<unsigned DIM>
 BuskeCompressionForce<DIM>::BuskeCompressionForce()
     : AbstractForce<DIM>(),
-      mCompressionEnergyParameter(5.0)
+      mCompressionEnergyParameter(pow(10,-9))
 {
 }
 
@@ -58,6 +59,7 @@ void BuskeCompressionForce<DIM>::SetCompressionEnergyParameter(double compressio
 template<unsigned DIM>
 void BuskeCompressionForce<DIM>::AddForceContribution(AbstractCellPopulation<DIM>& rCellPopulation)
 {
+
     // This force class is defined for NodeBasedCellPopulations only
     assert(dynamic_cast<NodeBasedCellPopulation<DIM>*>(&rCellPopulation) != NULL);
 
@@ -66,75 +68,85 @@ void BuskeCompressionForce<DIM>::AddForceContribution(AbstractCellPopulation<DIM
     c_vector<double, DIM> unit_vector;
 
     // Loop over cells in the population
-    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
+    for (typename AbstractCellPopulation<DIM>::RealCellsIterator cell_iter = rCellPopulation.Begin();
          cell_iter != rCellPopulation.End();
          ++cell_iter)
     {
         // Get the node index corresponding to this cell
         unsigned node_index = rCellPopulation.GetLocationIndexUsingCell(*cell_iter);
-
         Node<DIM>* p_node_i = rCellPopulation.GetNode(node_index);
 
-        // Get the location of this node
-        c_vector<double, DIM> node_i_location = p_node_i->rGetLocation();
-
-        // Get the radius of this cell
-        double radius_of_cell_i = p_node_i->GetRadius();
-
-        double delta_V_c = 0.0;
-        c_vector<double, DIM> dVAdd_vector = zero_vector<double>(DIM);
-
-        // Get the set of node indices corresponding to this cell's neighbours
-        std::set<unsigned> neighbouring_node_indices = p_static_cast_cell_population->GetNeighbouringNodeIndices(node_index);
-
-        // Loop over this set
-        for (std::set<unsigned>::iterator iter = neighbouring_node_indices.begin();
-             iter != neighbouring_node_indices.end();
-             ++iter)
-        {
-            Node<DIM>* p_node_j = rCellPopulation.GetNode(*iter);
+        double isKnot1 = cell_iter->GetCellData()->GetItem("IsBuskeKnot");
+        if(isKnot1==1){
+            //Skip this, knot
+        }else{
 
             // Get the location of this node
-            c_vector<double, DIM> node_j_location = p_node_j->rGetLocation();
-
-            // Get the unit vector parallel to the line joining the two nodes (assuming no periodicities etc.)
-            unit_vector = node_j_location - node_i_location;
-
-            // Calculate the distance between the two nodes
-            double dij = norm_2(unit_vector);
-
-            unit_vector /= dij;
-
-            // Get the radius of the cell corresponding to this node
-            double radius_of_cell_j = p_node_j->GetRadius();
-
-            // If the cells are close enough to exert a force on each other...
-            if (dij < radius_of_cell_i + radius_of_cell_j)
+            c_vector<double, DIM> node_i_location = p_node_i->rGetLocation();
+    
+            // Get the relaxed radius of this cell
+            double relaxedRadiusCellI = cell_iter->GetCellData()->GetItem("RelaxedRadius");
+            double V_T = (4.0/3.0) * M_PI * pow(relaxedRadiusCellI, 3);
+            // Get the current radius of this cell
+            double currentRadiusCellI = cell_iter->GetCellData()->GetItem("Radius");
+    
+            double deltaVC = 0.0;
+            c_vector<double, DIM> dVAdd = zero_vector<double>(DIM);
+    
+            // Get the set of node indices corresponding to this cell's neighbours
+            std::set<unsigned> neighbouring_node_indices = p_static_cast_cell_population->GetNeighbouringNodeIndices(node_index);
+    
+            // Loop over this set
+            for (std::set<unsigned>::iterator iter = neighbouring_node_indices.begin();
+                 iter != neighbouring_node_indices.end();
+                 ++iter)
             {
-                // ...then compute the adhesion force and add it to the vector of forces...
-                double xij = 0.5*(radius_of_cell_i*radius_of_cell_i - radius_of_cell_j*radius_of_cell_j + dij*dij)/dij;
-                double dxijdd = 1.0 - xij/dij;
-                double dVAdd = M_PI*dxijdd*(5.0*pow(radius_of_cell_i,2.0) + 3.0*pow(xij,2.0) - 8.0*radius_of_cell_i*xij)/3.0;
 
-                dVAdd_vector += dVAdd*unit_vector;
+                double isKnot2 = (rCellPopulation.GetCellUsingLocationIndex(*iter))->GetCellData()->GetItem("IsBuskeKnot");
+                if(isKnot2 ==  1){
+                    //Skip this, knot
+                }else{
 
-                // ...and add the contribution to the compression force acting on cell i
-                delta_V_c += M_PI*pow(radius_of_cell_i - xij,2.0)*(2*radius_of_cell_i - xij)/3.0;
+                    Node<DIM>* p_node_j = rCellPopulation.GetNode(*iter);
+    
+                    // Get the location of this node
+                    c_vector<double, DIM> node_j_location = p_node_j->rGetLocation();
+    
+                    // Get the unit vector parallel to the line joining the two nodes (assuming no periodicities etc.)
+                    unit_vector = node_j_location - node_i_location;
+    
+                    // Calculate the distance between the two nodes
+                    double dij = norm_2(unit_vector);
+    
+                    unit_vector /= dij;
+    
+                    // Get the radius of the cell corresponding to this node
+                    double currentRadiusCellJ =  (rCellPopulation.GetCellUsingLocationIndex(*iter))->GetCellData()->GetItem("Radius");
+    
+                    // If the cells are close enough to exert a force on each other...
+                    if (dij < currentRadiusCellI + currentRadiusCellJ)
+                    {
+                        // ...then compute the adhesion force and add it to the vector of forces...
+                        double xij = 0.5*(currentRadiusCellI*currentRadiusCellI - currentRadiusCellJ*currentRadiusCellJ + dij*dij)/dij;
+                        double dxijdd = 1.0 - xij/dij;
+                        double dVApartial = (M_PI/3.0)*(2*(currentRadiusCellI-xij)*(2*currentRadiusCellI-xij)*dxijdd + (currentRadiusCellI-xij)*(currentRadiusCellI-xij)*dxijdd);
+    
+                        dVAdd += dVApartial*unit_vector;
+    
+                        // ...and add the contribution to the compression force acting on cell i
+                        deltaVC += (M_PI/3.0)*pow(currentRadiusCellI - xij,2.0)*(2*currentRadiusCellI - xij);
+                    }
+                }
             }
+    
+            double V_A = 4.0/3.0*M_PI*pow(currentRadiusCellI,3.0) - deltaVC;
+    
+    
+            // Note: the sign in force_magnitude is different from the one in equation (A3) in the Buske paper
+            c_vector<double, DIM> applied_force = -(mCompressionEnergyParameter/V_T)*(V_T - V_A)* dVAdd;
+    
+            p_node_i->AddAppliedForceContribution(applied_force);
         }
-
-        double V_A = 4.0/3.0*M_PI*pow(radius_of_cell_i,3.0) - delta_V_c;
-
-        /**
-         * Target volume of the cell
-         * \todo Doesn't say in the Buske paper how they calculate this, so
-         * we need to look at this to be sure it's what we want (#1764)
-         */
-        double V_T = 5.0;
-
-        // Note: the sign in force_magnitude is different from the one in equation (A3) in the Buske paper
-        c_vector<double, DIM> applied_force = -mCompressionEnergyParameter/V_T*(V_T - V_A)*dVAdd_vector;
-        p_node_i->AddAppliedForceContribution(applied_force);
     }
 }
 
@@ -147,7 +159,10 @@ void BuskeCompressionForce<DIM>::OutputForceParameters(out_stream& rParamsFile)
     AbstractForce<DIM>::OutputForceParameters(rParamsFile);
 }
 
+/////////////////////////////////////////////////////////////////////////////
 // Explicit instantiation
+/////////////////////////////////////////////////////////////////////////////
+
 template class BuskeCompressionForce<1>;
 template class BuskeCompressionForce<2>;
 template class BuskeCompressionForce<3>;
