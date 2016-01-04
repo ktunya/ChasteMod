@@ -49,6 +49,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RK4NumericalMethodTimestepper.hpp"
 #include "AdamsMoultonNumericalMethodTimestepper.hpp"
 #include "BackwardEulerNumericalMethodTimestepper.hpp"
+#include "DOP853NumericalMethodTimestepper.hpp"
 #include "StepSizeException.hpp"
 #include "Warnings.hpp" 
 
@@ -115,6 +116,11 @@ OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::OffLatticeSimulation(AbstractCellPo
             timestepper = new AdamsMoultonNumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>(popRef, mForceCollection);
         }
         break;
+        case StepperChoice::DOP853:
+        {
+            timestepper = new DOP853NumericalMethodTimestepper<ELEMENT_DIM, SPACE_DIM>(popRef, mForceCollection);
+        }
+        break;
     }
 }
 
@@ -178,7 +184,6 @@ void OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::UpdateCellLocationsAndTopology
         try{
 
             timestepper->UpdateAllNodePositions(currentStepSize);
-            
             ApplyBoundaries(old_node_locations);
 
             // Successful timestep. Update totalTimeAdvanced and increase the timestep by 1% if possible 

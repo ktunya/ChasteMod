@@ -6,7 +6,7 @@ class StepperChoice {
 	public:
 
 		/** Enum representing available timesteppers **/
-    	enum Steppers {EULER, RK4, BACKWARDEULER, ADAMSMOULTON, LAST}; 
+    	enum Steppers {EULER, RK4, BACKWARDEULER, ADAMSMOULTON, DOP853, LAST}; 
 };
 
 #endif /*_STEPPPERCHOICE_HPP_*/
