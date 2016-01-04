@@ -68,7 +68,7 @@ void BuskeCompressionForce<DIM>::AddForceContribution(AbstractCellPopulation<DIM
     c_vector<double, DIM> unit_vector;
 
     // Loop over cells in the population
-    for (typename AbstractCellPopulation<DIM>::RealCellsIterator cell_iter = rCellPopulation.Begin();
+    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
          cell_iter != rCellPopulation.End();
          ++cell_iter)
     {

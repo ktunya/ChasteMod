@@ -173,7 +173,7 @@ void NodeBasedCellPopulationWithBuskeUpdate<DIM>::UpdateNodeLocations(double dt)
 
 
     // Iterate over all nodes associated with real cells, and construct the LHS matrix.
-    for (typename AbstractCellPopulation<DIM>::RealCellsIterator cell_iter = this->Begin();
+    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = this->Begin();
          cell_iter != this->End();
          ++cell_iter)
     {
@@ -373,7 +373,7 @@ void NodeBasedCellPopulationWithBuskeUpdate<DIM>::UpdateNodeLocations(double dt)
 
 
     // Iterate over all nodes associated with real cells and update their properties
-    for (typename AbstractCellPopulation<DIM>::RealCellsIterator cell_iter = this->Begin();
+    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = this->Begin();
          cell_iter != this->End();
          ++cell_iter)
     {
