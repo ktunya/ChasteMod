@@ -83,6 +83,7 @@ private:
         archive & mMeinekeSpringStiffness;
         archive & mMeinekeDivisionRestingSpringLength;
         archive & mMeinekeSpringGrowthDuration;
+        archive & mDecayAlpha;
     }
 
 protected:
@@ -112,6 +113,11 @@ protected:
      * The value of this parameter is usually the same as the M Phase of the cell cycle and defaults to 1.
      */
     double mMeinekeSpringGrowthDuration;
+
+    /*
+    * A constant determining how quickly the adhesion force falls off with distance 
+    */
+    double mDecayAlpha;
 
 public:
 
@@ -179,6 +185,18 @@ public:
      * @param springStiffness the new value of mMeinekeSpringStiffness
      */
     void SetMeinekeSpringStiffness(double springStiffness);
+
+    /**
+     * @return mDecayAlpha
+     */
+    double GetAdhesionDecayAlpha();
+
+    /**
+     * Set mDecayAlpha.
+     *
+     * @param alpha the new value of mDecayAlpha
+     */
+    void SetAdhesionDecayAlpha(double alpha);
 
     /**
      * Set mMeinekeDivisionRestingSpringLength.

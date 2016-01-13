@@ -41,7 +41,8 @@ GeneralisedLinearSpringForce<ELEMENT_DIM,SPACE_DIM>::GeneralisedLinearSpringForc
    : AbstractTwoBodyInteractionForce<ELEMENT_DIM,SPACE_DIM>(),
      mMeinekeSpringStiffness(15.0),        // denoted by mu in Meineke et al, 2001 (doi:10.1046/j.0960-7722.2001.00216.x)
      mMeinekeDivisionRestingSpringLength(0.5),
-     mMeinekeSpringGrowthDuration(1.0)
+     mMeinekeSpringGrowthDuration(1.0),
+     mDecayAlpha(5.0)
 {
     if (SPACE_DIM == 1)
     {
@@ -221,8 +222,7 @@ c_vector<double, SPACE_DIM> GeneralisedLinearSpringForce<ELEMENT_DIM,SPACE_DIM>:
         }
         else
         {
-            double alpha = 5.0;
-            c_vector<double, SPACE_DIM> temp = multiplication_factor*spring_stiffness * unit_difference * overlap * exp(-alpha * overlap/rest_length_final);
+            c_vector<double, SPACE_DIM> temp = multiplication_factor*spring_stiffness * unit_difference * overlap * exp(-mDecayAlpha * overlap/rest_length_final);
             return temp;
         }
     }
@@ -243,6 +243,17 @@ double GeneralisedLinearSpringForce<ELEMENT_DIM,SPACE_DIM>::GetMeinekeSpringGrow
 {
     return mMeinekeSpringGrowthDuration;
 }
+
+
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+double GeneralisedLinearSpringForce<ELEMENT_DIM,SPACE_DIM>::GetAdhesionDecayAlpha(){
+    return mDecayAlpha;
+};
+template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
+void GeneralisedLinearSpringForce<ELEMENT_DIM,SPACE_DIM>::SetAdhesionDecayAlpha(double alpha){
+    mDecayAlpha = alpha;
+};
+
 
 template<unsigned ELEMENT_DIM, unsigned SPACE_DIM>
 void GeneralisedLinearSpringForce<ELEMENT_DIM,SPACE_DIM>::SetMeinekeSpringStiffness(double springStiffness)
