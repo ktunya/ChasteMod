@@ -88,6 +88,8 @@ void CellTrackingOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,D
   //If it's an output timestep
   if (SimulationTime::Instance()->GetTimeStepsElapsed() % GetSamplingInterval() == 0){
 
+    std::cout << "Time: " << SimulationTime::Instance()->GetTime() << std::endl;
+
     //Loop over cells
     for (typename AbstractCellPopulation<DIM,DIM>::Iterator cell_iter = rCellPopulation.Begin();
     cell_iter != rCellPopulation.End(); ++cell_iter)
@@ -97,19 +99,16 @@ void CellTrackingOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,D
       Node<DIM>* node = rCellPopulation.GetNode(rCellPopulation.GetLocationIndexUsingCell(*cell_iter));
       unsigned id = cell_iter->GetCellId();
 
-      //If the cell meets the cellIDInterval requirement and is not ID = 0, output the position.
-      //Prohibition on the ID=0 cell is because this cell is the DTC, not a germ cell in C. elegans germ line
-      // simulations. That condition can be removed.  
-      if (id % GetCellIdInterval() == 0){ //&& id != 0){
+      if (id % GetCellIdInterval() == 0){ 
         c_vector<double, DIM> location = node->rGetLocation();
         *OutputFile << SimulationTime::Instance()->GetTime() << "\t" << id 
-        << "\t" <<  location[0] << "\t" <<  location[1] << "\t" <<  location[2] << "\t" <<
-                cell_iter->GetCellData()->GetItem("Radius") << "\n";
+        << "\t" <<  location[0] << "\t" <<  location[1] << "\t" <<  location[2]
+        << "\t" << node->GetRadius() << "\n";
       }
     }
   
-  //Output the data to file immediately, so if the simulation crashes you will have some data saved
-  OutputFile->flush();
+    //Output the data to file immediately, so if the simulation crashes you will have some data saved
+    OutputFile->flush();
   }
 
   //If simulation is finished, close the output file.
