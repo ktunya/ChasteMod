@@ -78,15 +78,8 @@ LinearSystem::LinearSystem(PetscInt lhsVectorSize, unsigned rowPreallocation)
     assert(lhsVectorSize > 0);
     if (mRowPreallocation == UINT_MAX)
     {
-        // Automatic preallocation if it's a small matrix
-        if (lhsVectorSize<15)
-        {
-            mRowPreallocation=lhsVectorSize;
-        }
-        else
-        {
-            EXCEPTION("You must provide a rowPreallocation argument for a large sparse system");
-        }
+        // Automatic preallocation
+        mRowPreallocation=lhsVectorSize;
     }
 
     mRhsVector = PetscTools::CreateVec(mSize);
@@ -1195,6 +1188,7 @@ Vec LinearSystem::Solve(Vec lhsGuess)
     {
         // Destroy solution vector on error to avoid memory leaks
         PetscTools::Destroy(lhs_vector);
+        std::cout << "PETSC ERROR in KSP solve " << e.GetMessage() << std::endl;
         throw e;
     }
 
