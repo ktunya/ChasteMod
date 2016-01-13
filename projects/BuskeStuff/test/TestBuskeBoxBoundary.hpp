@@ -87,7 +87,7 @@ public:
         cellsGenerator.GenerateBasicRandom(cells, realCellsMesh->GetNumNodes(), pStemType);
         NodeBasedCellPopulationWithBuskeUpdate<3> cellPopulation(*realCellsMesh, cells);
 
-        for(typename AbstractCellPopulation<3,3>::RealCellsIterator cell_iter = cellPopulation.Begin();
+        for(typename AbstractCellPopulation<3,3>::Iterator cell_iter = cellPopulation.Begin();
             cell_iter != cellPopulation.End();
             ++cell_iter){
         	cell_iter->GetCellData()->SetItem("Radius",2);
@@ -113,7 +113,7 @@ public:
 
 
         // Set up cell-based simulation
-        OffLatticeSimulation<3> simulator(cellPopulation, false, true, true);
+        OffLatticeSimulation<3> simulator(cellPopulation, false, true);
         simulator.SetOutputDirectory("TestBuskeBox");
         simulator.SetDt(1/250.0);
         simulator.SetSamplingTimestepMultiple(25);
@@ -129,23 +129,23 @@ public:
 
         for(int side=0; side<6; side++){
 
-        	//c_vector<double, 3> bottomLeft;
-        	//bottomLeft[0]=b[side*3];  bottomLeft[1]=b[side*3+1];  bottomLeft[2]=b[side*3+2];
+        	c_vector<double, 3> bottomLeft;
+        	bottomLeft[0]=b[side*3];  bottomLeft[1]=b[side*3+1];  bottomLeft[2]=b[side*3+2];
         	
-        	//c_vector<double, 3> topRight;
-			//topRight[0]=t[side*3];  topRight[1]=t[side*3+1];  topRight[2]=t[side*3+2];
+        	c_vector<double, 3> topRight;
+			topRight[0]=t[side*3];  topRight[1]=t[side*3+1];  topRight[2]=t[side*3+2];
 			
-			c_vector<double, 3> pointOnPlane;
-			pointOnPlane[0]=t[side*3];  pointOnPlane[1]=t[side*3+1];  pointOnPlane[2]=t[side*3+2];
+			//c_vector<double, 3> pointOnPlane;
+			//pointOnPlane[0]=t[side*3];  pointOnPlane[1]=t[side*3+1];  pointOnPlane[2]=t[side*3+2];
 			
 			c_vector<double, 3> normal;
 			normal[0]=n[side*3];  normal[1]=n[side*3+1];  normal[2]=n[side*3+2];
 			
-			//double knotSpacing = 1;
+			double knotSpacing = 1;
         	
-        	//MAKE_PTR_ARGS(BuskePlaneKnotBoundaryCondition<3>, pBoundary, (&cellPopulation, bottomLeft, topRight, normal, knotSpacing));
-        	MAKE_PTR_ARGS(BuskePlanePotentialBoundaryCondition<3>, pBoundary, (pointOnPlane, normal, 1.0, 1.0));
-        	simulator.AddForce(pBoundary);
+        	MAKE_PTR_ARGS(BuskePlaneKnotBoundaryCondition<3>, pBoundary, (&cellPopulation, bottomLeft, topRight, normal, knotSpacing));
+        	//MAKE_PTR_ARGS(BuskePlanePotentialBoundaryCondition<3>, pBoundary, (pointOnPlane, normal, 1.0, 1.0));
+        	simulator.AddCellPopulationBoundaryCondition(pBoundary);
     	}
 
     	std::cout << "Add forces" << std::endl;
@@ -154,18 +154,18 @@ public:
         MAKE_PTR(BuskeCompressionForce<3>, pCompression);
         MAKE_PTR(BuskeElasticForce<3>, pElastic);
         MAKE_PTR(BuskeAdhesiveForce<3>, pAdhesive);
-        //MAKE_PTR(BuskeKnotForce<3>, pKnot);
+        MAKE_PTR(BuskeKnotForce<3>, pKnot);
 
         pCompression->SetCompressionEnergyParameter(k);
         pElastic->SetDeformationEnergyParameter(d);
         pAdhesive->SetAdhesionEnergyParameter(eps);
-        //pKnot->SetMaxInteractionEnergy(pow(10,-11));
-        //pKnot->SetThresholdAdhesionRatio(0.95);
+        pKnot->SetMaxInteractionEnergy(pow(10,-11));
+        pKnot->SetThresholdAdhesionRatio(0.95);
         
         simulator.AddForce(pCompression);
         simulator.AddForce(pElastic);
         simulator.AddForce(pAdhesive);
-        //simulator.AddForce(pKnot);
+        simulator.AddForce(pKnot);
 
         std::cout << "Begin solve" << std::endl;
 
