@@ -95,6 +95,7 @@ void PositionBasedDifferentiationModifier<DIM>::UpdateAtEndOfTimeStep(AbstractCe
         if(dotProduct > 0){
             MAKE_PTR(DifferentiatedCellProliferativeType, pDiffState);
             cell_iter->SetCellProliferativeType(pDiffState);
+            cell_iter->GetCellData()->SetItem("Differentiated",1);
         } 
     }  
 }

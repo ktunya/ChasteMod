@@ -81,6 +81,9 @@ public:
  
         EXIT_IF_PARALLEL;   
 
+        std::cout << "FIXED SEED!" << std::endl;
+        RandomNumberGenerator::Instance()->Reseed(0);
+
         //-----------------------------------------------------------------------------------
         //-----------------------------------------------------------------------------------
 
@@ -178,6 +181,7 @@ public:
             pCell->GetCellData()->SetItem("Radius", cellRadius);
             pCell->GetCellData()->SetItem("RelaxedRadius", cellRadius);
             pCell->GetCellData()->SetItem("IsBuskeKnot", 0);
+            pCell->GetCellData()->SetItem("volume", 0);
 
             cells.push_back(pCell);
         }
@@ -263,7 +267,7 @@ public:
         // Add a distal arm boundary condition
 
         if(BoundaryType == FORCEBASED){
-            double forceStrength = 1000;
+            double forceStrength = 10000;
             MAKE_PTR_ARGS(BuskeDistalPotentialBoundaryCondition<3>, pBoundary, (armLength, armRadius, forceStrength));
             simulator.AddForce(pBoundary);
         }else if(BoundaryType == ARTIFICIAL){

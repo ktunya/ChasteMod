@@ -73,6 +73,8 @@ void PlaneBasedCellKillerWithRecording<DIM>::CheckAndLabelCellsForApoptosisOrDea
         }
     }
 
+    outputFile->flush();
+
     //If simulation is finished, close the output file.
     if(SimulationTime::Instance()->IsFinished()){
       outputFile->close();

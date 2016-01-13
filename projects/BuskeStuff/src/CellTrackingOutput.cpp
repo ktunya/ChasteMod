@@ -89,6 +89,7 @@ void CellTrackingOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,D
   if (SimulationTime::Instance()->GetTimeStepsElapsed() % GetSamplingInterval() == 0){
 
     std::cout << "Time: " << SimulationTime::Instance()->GetTime() << std::endl;
+    std::cout.flush();
 
     //Loop over cells
     for (typename AbstractCellPopulation<DIM,DIM>::Iterator cell_iter = rCellPopulation.Begin();
@@ -103,7 +104,7 @@ void CellTrackingOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,D
         c_vector<double, DIM> location = node->rGetLocation();
         *OutputFile << SimulationTime::Instance()->GetTime() << "\t" << id 
         << "\t" <<  location[0] << "\t" <<  location[1] << "\t" <<  location[2]
-        << "\t" << node->GetRadius() << "\n";
+        << "\t" << node->GetRadius() << "\t" << cell_iter->GetCellData()->GetItem("volume") << "\n";
       }
     }
   
