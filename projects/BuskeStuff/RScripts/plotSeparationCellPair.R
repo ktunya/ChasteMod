@@ -1,6 +1,6 @@
 plotCellPairs = function( vectorOfPlotNumbers ){
 
-resultsDir = "~/Documents/Chaste/testoutput/"
+resultsDir = "/home/kathryn/ChasteClean/testoutput/"
 directories = c("TestBuskeCellPairWithAdhesionNoRadial",
                 "TestBuskeCellPairWithAdhesionRadialChangesOnly",
                 "TestBuskeCellPairWithElasticityNoRadial",
