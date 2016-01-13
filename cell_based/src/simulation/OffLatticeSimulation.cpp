@@ -150,7 +150,10 @@ c_vector<double, SPACE_DIM> OffLatticeSimulation<ELEMENT_DIM,SPACE_DIM>::Calcula
         c_vector<double, SPACE_DIM> daughter_coords;
 
         // Get separation parameter
-        double separation = static_cast<AbstractCentreBasedCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))->GetMeinekeDivisionSeparation();
+        double divisionSepParam = static_cast<AbstractCentreBasedCellPopulation<ELEMENT_DIM,SPACE_DIM>*>(&(this->mrCellPopulation))->GetMeinekeDivisionSeparation();
+        Node<SPACE_DIM>* parentNodePtr = (this->mrCellPopulation).GetNode((this->mrCellPopulation).GetLocationIndexUsingCell(pParentCell)); 
+        double parentRadius = parentNodePtr->GetRadius();
+        double separation = divisionSepParam * (parentRadius * 2);
 
         // Make a random direction vector of the required length
         c_vector<double, SPACE_DIM> random_vector;
