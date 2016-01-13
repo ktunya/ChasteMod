@@ -74,7 +74,7 @@ void BuskePlanePotentialBoundaryCondition<DIM>::AddForceContribution(AbstractCel
 {
 
     //Loop over cells
-    for (typename AbstractCellPopulation<DIM>::RealCellsIterator cell_iter = rCellPopulation.Begin();
+    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
          cell_iter != rCellPopulation.End();
          ++cell_iter)
     {   
@@ -97,15 +97,11 @@ void BuskePlanePotentialBoundaryCondition<DIM>::AddForceContribution(AbstractCel
 
         if(separation > -radius){
 
-            std::cout << "Apply force sep: " << separation << std::endl;
-
             //Apply force
-            double magnitude = 100*pow(2.71828,separation);
+            double magnitude = 1000*pow(2.71828,separation);
             //double magnitude = interactionEnergy * ((thresholdAdhesionRatio/fabs(separation)) - (1/radius));
             c_vector<double, DIM> force = -normal*magnitude;
             node->AddAppliedForceContribution(force);
-
-            std::cout << "force: " << normalProjection[0] << " " << normalProjection[1] << " " << normalProjection[2] << std::endl;
 
             //Cell has escaped the boundary
             //std::cout << "Outside sep: " << separation << std::endl;

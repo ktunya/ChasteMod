@@ -76,9 +76,8 @@ void BuskeKnotForce<DIM>::AddForceContribution(AbstractCellPopulation<DIM>& rCel
 {
 
     int numKnots = dynamic_cast<NodeBasedCellPopulationWithBuskeUpdate<DIM>* >(&rCellPopulation)->GetNumKnots();
-    std::cout << "Adding knot contributions, numKnots: " << numKnots << std::endl; 
 
-    for (typename AbstractCellPopulation<DIM>::RealCellsIterator cell_iter = rCellPopulation.Begin();
+    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
          cell_iter != rCellPopulation.End();
          ++cell_iter)
     {   
@@ -96,16 +95,18 @@ void BuskeKnotForce<DIM>::AddForceContribution(AbstractCellPopulation<DIM>& rCel
             unsigned nodeIndex = rCellPopulation.GetLocationIndexUsingCell(*cell_iter);
             Node<DIM>* node = rCellPopulation.GetNode(nodeIndex);
             c_vector<double, DIM> cellLocation = node->rGetLocation();
-            std::vector<unsigned> neighbours = node->GetNeighbours();
+            
+            std::set<unsigned> neighbours = rCellPopulation.GetNeighbouringLocationIndices(*cell_iter);
 
             // Loop over neighbours and look for knots
-            for(int i=0; i<neighbours.size(); i++){
+            std::set<unsigned>::iterator it;
+            for(it = neighbours.begin(); it != neighbours.end(); ++it){
 
-                double isKnot = (rCellPopulation.GetCellUsingLocationIndex(neighbours[i]))->GetCellData()->GetItem("IsBuskeKnot");
+                double isKnot = (rCellPopulation.GetCellUsingLocationIndex(*it))->GetCellData()->GetItem("IsBuskeKnot");
 
                 if(isKnot == 1){
 
-                    Node<DIM>* knotNode = rCellPopulation.GetNode(neighbours[i]);
+                    Node<DIM>* knotNode = rCellPopulation.GetNode(*it);
                     c_vector<double, DIM> knotLocation = knotNode->rGetLocation();
                     double radius = knotNode->GetRadius();
                 

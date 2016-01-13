@@ -80,9 +80,6 @@ BuskePlaneKnotBoundaryCondition<DIM>::BuskePlaneKnotBoundaryCondition(AbstractCe
         slopeVec2[2] = slopeVec1[0]*normal[1] - slopeVec1[1]*normal[0];  
         slopeVec2 = slopeVec2/norm_2(slopeVec2);
 
-        std::cout << "slopevec1 " << slopeVec1[0] << " " << slopeVec1[1] << " " << slopeVec1[2] << std::endl;
-        std::cout << "slopevec2 " << slopeVec2[0] << " " << slopeVec2[1] << " " << slopeVec2[2] << std::endl;
-
         int counter = 0;
 
         while(cellPos[0]<=topRight[0] &&   cellPos[1]<=topRight[1] && cellPos[2]<=topRight[2] &&
@@ -97,7 +94,6 @@ BuskePlaneKnotBoundaryCondition<DIM>::BuskePlaneKnotBoundaryCondition(AbstractCe
                 nKnots++;
 
                 pos += slopeVec2*knotSpacing;
-                std::cout << "pos " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
             }
 
             pos = cellPos-slopeVec2*knotSpacing;
@@ -109,7 +105,6 @@ BuskePlaneKnotBoundaryCondition<DIM>::BuskePlaneKnotBoundaryCondition(AbstractCe
                 nKnots++;
 
                 pos -= slopeVec2*knotSpacing;
-                std::cout << "pos " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
             }
             
             cellPos += slopeVec1*knotSpacing;
@@ -185,7 +180,7 @@ bool BuskePlaneKnotBoundaryCondition<DIM>::VerifyBoundaryCondition()
 {
     bool condition_satisfied = true;
 
-    for (typename AbstractCellPopulation<DIM>::RealCellsIterator cell_iter = this->mpCellPopulation->Begin();
+    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = this->mpCellPopulation->Begin();
          cell_iter != this->mpCellPopulation->End();
          ++cell_iter)
     {

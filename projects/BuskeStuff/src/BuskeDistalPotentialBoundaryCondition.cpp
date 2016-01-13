@@ -71,7 +71,7 @@ void BuskeDistalPotentialBoundaryCondition<DIM>::AddForceContribution(AbstractCe
     double maxMagnitude = 0;
 
     //Loop over cells
-    for (typename AbstractCellPopulation<DIM>::RealCellsIterator cell_iter = rCellPopulation.Begin();
+    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
          cell_iter != rCellPopulation.End();
          ++cell_iter)
     {   
