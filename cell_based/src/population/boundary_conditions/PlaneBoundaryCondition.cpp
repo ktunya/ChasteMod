@@ -102,8 +102,9 @@ void PlaneBoundaryCondition<DIM>::ImposeBoundaryCondition(const std::map<Node<DI
                 Node<DIM>* p_node = this->mpCellPopulation->GetNode(node_index);
 
                 c_vector<double, DIM> node_location = p_node->rGetLocation();
+                double radius = cell_iter->GetCellData()->GetItem("Radius");
 
-                double signed_distance = inner_prod(node_location - mPointOnPlane, mNormalToPlane);
+                double signed_distance = inner_prod(node_location - mPointOnPlane, mNormalToPlane) + radius;
                 if (signed_distance > 0.0)
                 {
                     // For the closest point on the plane we travel from node_location the signed_distance in the direction of -mNormalToPlane

@@ -56,7 +56,6 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "PlaneBasedCellKillerWithRecording.hpp"
 #include "CellTrackingOutput.hpp"
 
-
 #include "BuskeAdhesiveForce.hpp"
 #include "BuskeElasticForce.hpp"
 #include "BuskeCompressionForce.hpp"
@@ -93,16 +92,17 @@ public:
         Force ForceLaw = BUSKE;
 
         // buske only
-        bool adhesionOn = true;
+        bool adhesionOn = false;
         bool elasticityOn = true;
-        bool compressionOn = true;
-        bool varyingRadiiOn = true;
-        double eps = 200*pow(10,-6);         
-        double d = (4/3)*pow(10,-3);         
-        double k = 1000;                     
-        double dampingIntercell = 5 * pow(10, 10);
-        double dampingMedium = 3.2;
-        double dampingVolume = 400; 
+        bool compressionOn = false;
+        bool varyingRadiiOn = false;
+
+        double eps = 2592;                           
+        double d = 1.0288*pow(10,-4);                      
+        double k = 12960;                               
+        double dampingIntercell = 180;            
+        double dampingMedium = 11520;             
+        double dampingVolume = 1440000;           
 
         // spring only
         double meinekeSpringConstant = 15;
@@ -119,10 +119,10 @@ public:
         enum Boundary {ARTIFICIAL, FORCEBASED}; 
         Boundary BoundaryType = FORCEBASED;
 
-        double armLength = 248;
-        double armRadius = 11.3;
-        double cellRowSpacing = 5;
-        double cellsPerRow = 10.0;
+        double cellsPerRow = 10.0; 
+        double armLength = 248; 
+        double armRadius = 11.3; 
+        double cellRowSpacing = 5; 
         double cellRadius = 2.8;
         double prolifZoneLength = 70;
 
@@ -186,34 +186,42 @@ public:
             cells.push_back(pCell);
         }
 
-        NodeBasedCellPopulationWithBuskeUpdate<3> cellPopulation(*mesh, cells);
+        NodeBasedCellPopulation<3>* cellPopulationPtr;
 
         //-----------------------------------------------------------------------------------
         //-----------------------------------------------------------------------------------
-
-        // Set some cell population options
 
         // population options for both forces
-        cellPopulation.SetUseVariableRadii( true );
-        cellPopulation.SetMeinekeDivisionSeparation( meinekeDivisionSeparation );
-        cellPopulation.SetAbsoluteMovementThreshold(2);
+        if(ForceLaw == SPRING){
+            cellPopulationPtr = new NodeBasedCellPopulation<3>(*mesh, cells);
+            cellPopulationPtr->SetDampingConstantNormal(dampingMedium);
+        }
 
         // population options for Buske only
         if(ForceLaw == BUSKE){
-            cellPopulation.SetUseVaryingRadii( varyingRadiiOn );
-            cellPopulation.SetDampingConstantIntercell( dampingIntercell );  
-            cellPopulation.SetDampingConstantMedium( dampingMedium );                 
-            cellPopulation.SetDampingConstantVolume( dampingVolume );                 
+            NodeBasedCellPopulationWithBuskeUpdate<3>* bCellPopulation =
+                       new NodeBasedCellPopulationWithBuskeUpdate<3>(*mesh, cells);
+            bCellPopulation->SetUseVaryingRadii( varyingRadiiOn );
+            bCellPopulation->SetDampingConstantIntercell( dampingIntercell ); 
+            bCellPopulation->SetDampingConstantMedium( dampingMedium );                 
+            bCellPopulation->SetDampingConstantVolume( dampingVolume );                 
             if( adhesionOn ){
-                cellPopulation.EnableAdhesion(eps);
+                bCellPopulation->EnableAdhesion(eps);
             }
             if( compressionOn ){
-                cellPopulation.EnableCompression(k);
+                bCellPopulation->EnableCompression(k);
             }
             if( elasticityOn ){
-                cellPopulation.EnableElasticity(d);
+                bCellPopulation->EnableElasticity(d);
             }
+            cellPopulationPtr = bCellPopulation;
         }
+
+        NodeBasedCellPopulation<3>& cellPopulation = *cellPopulationPtr;
+        cellPopulation.SetUseVariableRadii( true );
+        cellPopulation.SetMeinekeDivisionSeparation( meinekeDivisionSeparation );
+        cellPopulation.SetAbsoluteMovementThreshold(2);
+        cellPopulation.SetDampingConstantNormal(1.0);
 
         //-----------------------------------------------------------------------------------
         //-----------------------------------------------------------------------------------
@@ -234,14 +242,17 @@ public:
             if(compressionOn){
                 filename << "k" << k << "_";
             }
+            if(varyingRadiiOn){
+                filename << "varying_";
+            }
         }
         if(ForceLaw == SPRING){
             filename << "TestSpringDistal_mu" << meinekeSpringConstant << "_alpha" << adhesionDecay << "_";
         }
         simulator.SetOutputDirectory(filename.str());
-        float stepsPerHour = 2500;
-        simulator.SetDt(1/stepsPerHour); // Don't forget to try a run lowering dt, to check convergence
-        simulator.SetSamplingTimestepMultiple((int)(stepsPerHour));
+        float stepsPerHour = 3000;
+        simulator.SetDt(1.0/stepsPerHour); // Don't forget to try a run lowering dt, to check convergence
+        simulator.SetSamplingTimestepMultiple((int)(stepsPerHour/60.0));
         simulator.SetEndTime(200);
 
         //-----------------------------------------------------------------------------------
@@ -267,7 +278,7 @@ public:
         // Add a distal arm boundary condition
 
         if(BoundaryType == FORCEBASED){
-            double forceStrength = 10000;
+            double forceStrength = 1000000;
             MAKE_PTR_ARGS(BuskeDistalPotentialBoundaryCondition<3>, pBoundary, (armLength, armRadius, forceStrength));
             simulator.AddForce(pBoundary);
         }else if(BoundaryType == ARTIFICIAL){

@@ -69,29 +69,31 @@ public:
         // SETTINGS -------------------------------------------------------------------
         //-----------------------------------------------------------------------------
 
-        std::string outDir("BuskeNonOverlapping");
+        std::string outDir("SpringNewMu");
 
         enum Force {BUSKE, SPRING}; 
-        Force ForceLaw = BUSKE;
+        Force ForceLaw = SPRING;
 
         // buske only
         bool adhesionOn = true;
         bool elasticityOn = true;
         bool compressionOn = true;
         bool varyingRadiiOn = true;
-        double eps = 200*pow(10,-6);        
-        double d = (4/3)*pow(10,-3);         
-        double k = 1000;                     
-        double dampingIntercell = 5 * pow(10, 10);
-        double dampingMedium = 3.2;
-        double dampingVolume = 400; 
+
+        double eps = 2592;                        //200*pow(10,-6);        
+        double d = 1.0288*pow(10,-4);             //(4.0/3.0)*pow(10,-3);         
+        double k = 12960;                         //1000;                     
+        double dampingIntercell = 180;            //5 * pow(10, 10);
+        double dampingMedium = 11520;             //3.2;
+        double dampingVolume = 1440000;           //400; 
+
 
         // spring only
-        double meinekeSpringConstant = 0.00145;
+        double meinekeSpringConstant = 14152;
         double adhesionDecay = 5;
-        double damping = 3.2;
+        double damping = 11520;
 
-        double initialSepMicrons = 6.5;
+        double initialSepMicrons = 1;
         double R1Microns = 3;
         double R2Microns = 3;
 
@@ -144,9 +146,9 @@ public:
         // SETUP SIMULATION
         OffLatticeSimulation<3> simulator(*cellPopulation);
         simulator.SetOutputDirectory(outDir.c_str());
-        simulator.SetEndTime(1800.0);
-        simulator.SetDt(1.0/250.0);
-        simulator.SetSamplingTimestepMultiple(250);
+        simulator.SetEndTime(0.5);
+        simulator.SetDt(1.0/3600.0);
+        simulator.SetSamplingTimestepMultiple(1);
 
         // ADD FORCES
         if(ForceLaw == BUSKE){
@@ -176,7 +178,7 @@ public:
         }
 
         // RECORD CELL POSITIONS
-        MAKE_PTR_ARGS(CellTrackingOutput<3>, pTracking, (250, 1));
+        MAKE_PTR_ARGS(CellTrackingOutput<3>, pTracking, (1, 1));
         simulator.AddSimulationModifier(pTracking);
         
         // SOLVE
@@ -187,13 +189,13 @@ private:
 
     NodesOnlyMesh<3>* CreateMeshBuske(double R1, double R2, double initialSep){
 
-        double startingRadius1 = R1*pow(10,-6);
-        double startingRadius2 = R2*pow(10,-6);
+        double startingRadius1 = R1;
+        double startingRadius2 = R2;
 
         c_vector<double, 3> pos1;
         pos1[0]=0; pos1[1]=0; pos1[2]=0;
         c_vector<double, 3> pos2;
-        pos2[0]=0; pos2[1]=initialSep*pow(10,-6); pos2[2]=0;
+        pos2[0]=0; pos2[1]=initialSep; pos2[2]=0;
 
         NodesOnlyMesh<3>* mesh = CreateMesh(pos1, pos2, startingRadius1, startingRadius2);
         return(mesh);     
@@ -234,10 +236,10 @@ private:
 
     std::vector<CellPtr> CreateCellsBuske(double R1, double R2){
 
-        double relaxedRadius1 = R1*pow(10,-6);
-        double relaxedRadius2 = R2*pow(10,-6);
-        double startingRadius1 = R1*pow(10,-6);
-        double startingRadius2 = R2*pow(10,-6);
+        double relaxedRadius1 = R1;
+        double relaxedRadius2 = R2;
+        double startingRadius1 = R1;
+        double startingRadius2 = R2;
 
         std::vector<CellPtr> Cells = CreateCells(relaxedRadius1, relaxedRadius2, startingRadius1, startingRadius2, false);
         return(Cells);
@@ -283,6 +285,7 @@ private:
                 new_cell->GetCellData()->SetItem("Radius", startingRadius2);
                 new_cell->GetCellData()->SetItem("IsBuskeKnot", 0);
             }
+            new_cell->GetCellData()->SetItem("volume",0.0); //UNUSED
             cells.push_back(new_cell);
         }  
         return( cells );

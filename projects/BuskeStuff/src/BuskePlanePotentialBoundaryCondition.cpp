@@ -98,7 +98,7 @@ void BuskePlanePotentialBoundaryCondition<DIM>::AddForceContribution(AbstractCel
         if(separation > -radius){
 
             //Apply force
-            double magnitude = 1000*pow(2.71828,separation);
+            double magnitude = 1000000*pow(2.71828,separation);
             //double magnitude = interactionEnergy * ((thresholdAdhesionRatio/fabs(separation)) - (1/radius));
             c_vector<double, DIM> force = -normal*magnitude;
             node->AddAppliedForceContribution(force);

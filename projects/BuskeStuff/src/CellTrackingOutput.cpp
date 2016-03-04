@@ -104,7 +104,7 @@ void CellTrackingOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,D
         c_vector<double, DIM> location = node->rGetLocation();
         *OutputFile << SimulationTime::Instance()->GetTime() << "\t" << id 
         << "\t" <<  location[0] << "\t" <<  location[1] << "\t" <<  location[2]
-        << "\t" << node->GetRadius() << "\t" << cell_iter->GetCellData()->GetItem("volume") << "\n";
+        << "\t" << node->GetRadius() << "\n";
       }
     }
   
